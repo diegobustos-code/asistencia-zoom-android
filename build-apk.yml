@@ -1,0 +1,29 @@
+name: Compilar APK de Android
+
+# Se ejecuta automáticamente cada vez que se suben cambios a la rama
+# "main", y también se puede lanzar manualmente desde la pestaña
+# "Actions" de GitHub con el botón "Run workflow".
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v4
+
+      - name: Compilar el APK con Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: stable
+
+      - name: Publicar el APK como archivo descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: AsistenciaZoom-APK
+          path: ${{ steps.buildozer.outputs.filename }}
