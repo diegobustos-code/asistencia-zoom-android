@@ -295,17 +295,23 @@ class ZoomAttendanceMobileApp(App):
         except Exception as e:
             _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}")
 
-    def _on_zoom_selected(self, selection):
-        if not selection:
+   def _on_zoom_selected(self, selection):
+        if not selection or not isinstance(selection, list):
             return
         filepath = selection[0]
-        Clock.schedule_once(lambda dt: self._load_zoom_file(filepath))
+        if os.path.exists(filepath):
+            Clock.schedule_once(lambda dt: self._load_zoom_file(filepath))
+        else:
+            _show_popup("Error", "No se pudo acceder al archivo seleccionado.")
 
     def _on_roster_selected(self, selection):
-        if not selection:
+        if not selection or not isinstance(selection, list):
             return
         filepath = selection[0]
-        Clock.schedule_once(lambda dt: self._load_roster_file(filepath))
+        if os.path.exists(filepath):
+            Clock.schedule_once(lambda dt: self._load_roster_file(filepath))
+        else:
+            _show_popup("Error", "No se pudo acceder al archivo seleccionado.")
 
     # ------------------------------------------------------------------
     # Carga de archivos (misma lógica que la versión de escritorio)
