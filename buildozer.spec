@@ -28,7 +28,7 @@ android.permissions = INTERNET
 # --- Configuración de compilación de Android ---
 android.api = 33
 android.minapi = 21
-android.ndk = 25b
+android.ndk = 27c
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
 android.enable_androidx = True
