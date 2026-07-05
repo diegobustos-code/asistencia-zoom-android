@@ -10,8 +10,7 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 1.0
 
 # --- Dependencias que necesita la app dentro del APK ---
-# Añadimos pyjnius para que plyer pueda interactuar con el sistema Android
-requirements = python3,kivy==2.3.1,openpyxl==3.1.5,plyer,pyjnius,et_xmlfile
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,openpyxl==3.1.5,plyer,pyjnius,et_xmlfile
 
 # --- Orientación e íconos ---
 orientation = portrait
