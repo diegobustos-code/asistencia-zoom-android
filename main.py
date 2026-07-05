@@ -19,6 +19,7 @@ Funciones:
 
 import os
 
+# Importaciones base de la biblioteca Kivy para el diseño y control de la aplicación
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
@@ -28,6 +29,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.label import Label
 
+# Importación de la lógica compartida con la versión de escritorio para el manejo de archivos
 from csv_processor import (
     CSVProcessingError,
     compute_attendance_flag,
@@ -42,10 +44,15 @@ from roster_matcher import (
     match_zoom_to_roster,
 )
 
+# Umbral por defecto en minutos para considerar que un socio asistió
 DEFAULT_THRESHOLD = "30"
 
+# ------------------------------------------------------------------
+# Diseño de la Interfaz Gráfica usando el Lenguaje KV de Kivy
+# ------------------------------------------------------------------
 KV = """
 <RowWidget>:
+    # Configuración para cada fila individual de la tabla dinámica (RecycleView)
     orientation: "horizontal"
     size_hint_y: None
     height: dp(46)
@@ -57,6 +64,8 @@ KV = """
         Rectangle:
             pos: self.pos
             size: self.size
+    
+    # Columnas de datos representadas por etiquetas de texto (Labels)
     Label:
         text: root.nombre
         color: 0, 0, 0, 1
@@ -98,10 +107,12 @@ KV = """
         valign: "middle"
 
 BoxLayout:
+    # Contenedor principal de la pantalla de la aplicación
     orientation: "vertical"
     padding: dp(8)
     spacing: dp(6)
 
+    # Fila superior de botones de acción
     BoxLayout:
         size_hint_y: None
         height: dp(44)
@@ -117,6 +128,7 @@ BoxLayout:
             disabled: not (app.zoom_loaded and app.roster_loaded)
             on_release: app.on_cotejar()
 
+    # Barra informativa de estado del procesamiento
     Label:
         id: status_label
         text: app.status_text
@@ -127,6 +139,7 @@ BoxLayout:
         valign: "middle"
         color: 0.2, 0.2, 0.2, 1
 
+    # Fila con campos de entrada de filtros y parámetros
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -152,6 +165,7 @@ BoxLayout:
             size_hint_x: 0.22
             on_text_validate: app.apply_filters()
 
+    # Fila con el selector de ordenamiento y el botón para aplicar filtros
     BoxLayout:
         size_hint_y: None
         height: dp(40)
@@ -166,6 +180,7 @@ BoxLayout:
             size_hint_x: 0.35
             on_release: app.apply_filters()
 
+    # Encabezados estáticos de las columnas de datos
     BoxLayout:
         size_hint_y: None
         height: dp(28)
@@ -190,6 +205,7 @@ BoxLayout:
             bold: True
             size_hint_x: 0.10
 
+    # Lista de desplazamiento optimizada (RecycleView) para mostrar cientos de filas sin lag
     RecycleView:
         id: rv
         viewclass: "RowWidget"
@@ -200,6 +216,7 @@ BoxLayout:
             height: self.minimum_height
             orientation: "vertical"
 
+    # Etiqueta que indica el total y la cantidad de elementos filtrados
     Label:
         id: count_label
         text: app.count_text
@@ -207,6 +224,7 @@ BoxLayout:
         height: dp(28)
         color: 0.2, 0.2, 0.2, 1
 
+    # Fila inferior con opciones de exportación y reportes de errores
     BoxLayout:
         size_hint_y: None
         height: dp(46)
@@ -227,6 +245,10 @@ BoxLayout:
 
 
 class RowWidget(RecycleDataViewBehavior, BoxLayout):
+    """
+    Componente visual que representa una sola fila de información en la tabla dinámica.
+    Asigna de forma reactiva los valores a las columnas y colorea el fondo.
+    """
     nombre = StringProperty("")
     apellido = StringProperty("")
     sede = StringProperty("")
@@ -235,21 +257,29 @@ class RowWidget(RecycleDataViewBehavior, BoxLayout):
     bgcolor = ListProperty([1, 1, 1, 1])
 
     def refresh_view_attrs(self, rv, index, data):
+        """Actualiza las propiedades visuales de la fila al desplazarse por la lista."""
         self.nombre = data.get("nombre", "")
         self.apellido = data.get("apellido", "")
         self.sede = data.get("sede", "")
         self.duracion = data.get("duracion", "")
         self.asistencia = data.get("asistencia", "")
+        
+        # Cambia el color de fondo dinámicamente según la asistencia del usuario
         if self.asistencia == "P":
-            self.bgcolor = [0.83, 0.95, 0.85, 1]
+            self.bgcolor = [0.83, 0.95, 0.85, 1]  # Verde claro para "Presente"
         elif self.asistencia == "A":
-            self.bgcolor = [0.99, 0.87, 0.87, 1]
+            self.bgcolor = [0.99, 0.87, 0.87, 1]  # Rojo claro para "Ausente"
         else:
-            self.bgcolor = [1, 1, 1, 1]
+            self.bgcolor = [1, 1, 1, 1]           # Blanco por defecto
+            
         return super().refresh_view_attrs(rv, index, data)
 
 
 def _show_popup(title: str, message: str) -> None:
+    """
+    Genera y despliega un cuadro de diálogo emergente nativo de Kivy en la pantalla.
+    Útil para notificar errores, advertencias o confirmaciones.
+    """
     box = BoxLayout(orientation="vertical", padding=10, spacing=10)
     box.add_widget(Label(text=message))
     from kivy.uix.button import Button
@@ -261,6 +291,10 @@ def _show_popup(title: str, message: str) -> None:
 
 
 class ZoomAttendanceMobileApp(App):
+    """
+    Clase controladora principal de la aplicación. Maneja el estado global del sistema,
+    los flujos de carga de datos, los filtros aplicados y las integraciones de hardware (compartir/archivos).
+    """
     status_text = StringProperty("Ningún archivo cargado todavía.")
     count_text = StringProperty("Total: 0 | Filtrados: 0")
     zoom_loaded = False
@@ -269,6 +303,7 @@ class ZoomAttendanceMobileApp(App):
     has_pendientes = False
 
     def build(self):
+        """Inicializa las listas globales de control y retorna el árbol de widgets construido mediante KV."""
         self.zoom_records = []
         self.roster_records = []
         self.all_records = []
@@ -279,9 +314,10 @@ class ZoomAttendanceMobileApp(App):
         return Builder.load_string(KV)
 
     # ------------------------------------------------------------------
-    # Selección de archivos (usa el selector nativo de Android/escritorio)
+    # Interacción con el Almacenamiento/Archivos (Usa plyer)
     # ------------------------------------------------------------------
     def open_zoom_dialog(self):
+        """Invoca el selector de archivos nativo del sistema para el reporte de Zoom."""
         from plyer import filechooser
         try:
             filechooser.open_file(on_selection=self._on_zoom_selected)
@@ -289,34 +325,41 @@ class ZoomAttendanceMobileApp(App):
             _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}")
 
     def open_roster_dialog(self):
+        """Invoca el selector de archivos nativo del sistema para el listado maestro de socios."""
         from plyer import filechooser
         try:
             filechooser.open_file(on_selection=self._on_roster_selected)
         except Exception as e:
             _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}")
 
-   def _on_zoom_selected(self, selection):
+    # === CORRECCIÓN DE INDENTACIÓN APLICADA: 4 espacios exactos de alineación con la clase ===
+    def _on_zoom_selected(self, selection):
+        """Callback ejecutado tras elegir un archivo en el explorador para los datos de Zoom."""
         if not selection or not isinstance(selection, list):
             return
         filepath = selection[0]
         if os.path.exists(filepath):
+            # Agenda la carga pesada del archivo de forma segura en el bucle principal de Kivy
             Clock.schedule_once(lambda dt: self._load_zoom_file(filepath))
         else:
             _show_popup("Error", "No se pudo acceder al archivo seleccionado.")
 
     def _on_roster_selected(self, selection):
+        """Callback ejecutado tras elegir un archivo en el explorador para el listado de socios."""
         if not selection or not isinstance(selection, list):
             return
         filepath = selection[0]
         if os.path.exists(filepath):
+            # Agenda la carga pesada del archivo de forma segura en el bucle principal de Kivy
             Clock.schedule_once(lambda dt: self._load_roster_file(filepath))
         else:
             _show_popup("Error", "No se pudo acceder al archivo seleccionado.")
 
     # ------------------------------------------------------------------
-    # Carga de archivos (misma lógica que la versión de escritorio)
+    # Carga y Lectura de Datos
     # ------------------------------------------------------------------
     def _load_zoom_file(self, filepath):
+        """Lee la información del archivo de Zoom, gestionando si es un .xlsx renombrado a .csv."""
         try:
             was_disguised = is_disguised_excel_file(filepath)
             records, column_map = load_zoom_csv(filepath)
@@ -335,6 +378,7 @@ class ZoomAttendanceMobileApp(App):
         self.ambiguos = []
         self.has_pendientes = False
 
+        # Limpia los campos e inicializa la visualización de la lista
         self._reset_filters()
         self.apply_filters()
 
@@ -343,6 +387,7 @@ class ZoomAttendanceMobileApp(App):
         self.status_text = f"Zoom: {nombre_archivo}{aviso} — {len(records)} participantes."
 
     def _load_roster_file(self, filepath):
+        """Lee y almacena temporalmente la lista estructurada de socios oficiales de la organización."""
         try:
             roster = load_roster_excel(filepath)
         except RosterProcessingError as e:
@@ -359,13 +404,15 @@ class ZoomAttendanceMobileApp(App):
                             f"{'Presiona Cotejar.' if self.zoom_loaded else 'Ahora abre también el CSV de Zoom.'}"
 
     # ------------------------------------------------------------------
-    # Cotejo
+    # Algoritmo de Cruce y Cotejo
     # ------------------------------------------------------------------
     def on_cotejar(self):
+        """Ejecuta el cruce difuso entre los asistentes de Zoom y el listado de socios."""
         if not self.zoom_records or not self.roster_records:
             _show_popup("Faltan archivos", "Debes cargar el CSV de Zoom y el listado de socios.")
             return
 
+        # Obtiene el umbral numérico de minutos configurado en la UI
         threshold = self._safe_float(self.root.ids.threshold_input.text, 30.0)
         resultado, no_encontrados, ambiguos = match_zoom_to_roster(
             self.zoom_records, self.roster_records, threshold
@@ -376,9 +423,11 @@ class ZoomAttendanceMobileApp(App):
         self.mode = "cotejo"
         self.has_pendientes = bool(no_encontrados or ambiguos)
 
+        # Refresca los filtros de búsqueda manteniendo el umbral modificado por el usuario
         self._reset_filters(keep_threshold=True)
         self.apply_filters()
 
+        # Calcula totales rápidos para la barra de estado
         p = sum(1 for r in resultado if r["Asistencia"] == "P")
         a = sum(1 for r in resultado if r["Asistencia"] == "A")
         self.status_text = (
@@ -387,9 +436,10 @@ class ZoomAttendanceMobileApp(App):
         )
 
     # ------------------------------------------------------------------
-    # Filtros, orden y refresco de la tabla
+    # Lógica de Filtrado, Ordenamiento y Actualización de UI
     # ------------------------------------------------------------------
     def _reset_filters(self, keep_threshold=False):
+        """Limpia las cadenas de texto ingresadas en la barra de búsqueda."""
         self.root.ids.search_input.text = ""
         self.root.ids.min_duration_input.text = ""
         if not keep_threshold:
@@ -397,6 +447,7 @@ class ZoomAttendanceMobileApp(App):
 
     @staticmethod
     def _safe_float(text, default):
+        """Convierte cadenas de texto a números decimales de forma segura, previniendo comas regionales."""
         text = (text or "").strip().replace(",", ".")
         if not text:
             return default
@@ -406,9 +457,11 @@ class ZoomAttendanceMobileApp(App):
             return default
 
     def apply_filters(self):
+        """Aplica la lógica de filtrado por texto, minutos mínimos y ordena la lista en pantalla."""
         if not self.all_records:
             return
 
+        # Recalcula el flag de asistencia ("P" o "A") en base al umbral actual
         threshold = self._safe_float(self.root.ids.threshold_input.text, 30.0)
         for record in self.all_records:
             record["Asistencia"] = compute_attendance_flag(
@@ -418,6 +471,7 @@ class ZoomAttendanceMobileApp(App):
         search_text = self.root.ids.search_input.text.strip().lower()
         min_duration = self._safe_float(self.root.ids.min_duration_input.text, 0.0)
 
+        # Filtrar registros que cumplan con la búsqueda
         filtered = []
         for record in self.all_records:
             if record["Duración (minutos)"] < min_duration:
@@ -432,6 +486,7 @@ class ZoomAttendanceMobileApp(App):
                     continue
             filtered.append(record)
 
+        # Ordenar la lista según el criterio seleccionado en el Spinner de la UI
         sort_choice = self.root.ids.sort_spinner.text
         if sort_choice == "Duración (mayor a menor)":
             filtered.sort(key=lambda r: r["Duración (minutos)"], reverse=True)
@@ -449,6 +504,7 @@ class ZoomAttendanceMobileApp(App):
         self.filtered_records = filtered
         self.has_results = bool(filtered)
 
+        # Transfiere los diccionarios de datos refinados al almacén de RecycleView para redibujar la UI
         self.root.ids.rv.data = [
             {
                 "nombre": r.get("Nombre", ""),
@@ -464,18 +520,21 @@ class ZoomAttendanceMobileApp(App):
         self.count_text = f"Total {etiqueta}: {len(self.all_records)} | Filtrados: {len(filtered)}"
 
     # ------------------------------------------------------------------
-    # Exportación (guarda en almacenamiento privado de la app y comparte)
+    # Subsistema de Almacenamiento y Compartición de Archivos Externos
     # ------------------------------------------------------------------
     def _export_dir(self):
+        """Obtiene una ruta segura de almacenamiento aislada provista para la app."""
         path = self.user_data_dir
         os.makedirs(path, exist_ok=True)
         return path
 
     def _share_file(self, filepath, title):
+        """Llama a la capa del sistema operativo para abrir el menú 'Compartir con...' (WhatsApp, Drive, etc.)."""
         try:
             from plyer import share
             share.share(title=title, filepath=filepath)
         except Exception:
+            # Fallback en caso de que la API de compartir falle o se ejecute en PC de desarrollo
             _show_popup(
                 "Archivo generado",
                 f"El archivo se guardó en:\n{filepath}\n\n"
@@ -484,6 +543,7 @@ class ZoomAttendanceMobileApp(App):
             )
 
     def export_csv(self):
+        """Construye y exporta un documento estructurado .csv con el set de datos en pantalla."""
         if not self.filtered_records:
             _show_popup("Sin datos", "No hay resultados filtrados para exportar.")
             return
@@ -496,6 +556,7 @@ class ZoomAttendanceMobileApp(App):
         self._share_file(filepath, "Asistencia (CSV)")
 
     def export_excel(self):
+        """Construye y exporta un documento estructurado .xlsx nativo (Excel)."""
         if not self.filtered_records:
             _show_popup("Sin datos", "No hay resultados filtrados para exportar.")
             return
@@ -508,6 +569,7 @@ class ZoomAttendanceMobileApp(App):
         self._share_file(filepath, "Asistencia (Excel)")
 
     def export_pendientes(self):
+        """Genera un reporte especial CSV agrupando los nombres de Zoom huérfanos o con colisiones múltiples."""
         if not self.no_encontrados and not self.ambiguos:
             _show_popup("Sin pendientes", "No hay registros pendientes de revisión.")
             return
@@ -537,5 +599,6 @@ class ZoomAttendanceMobileApp(App):
         self._share_file(filepath, "Pendientes de revisión")
 
 
+# Inicializador del hilo de ejecución de Python
 if __name__ == "__main__":
     ZoomAttendanceMobileApp().run()
