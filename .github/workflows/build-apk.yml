@@ -28,14 +28,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Preparar SDK/NDK
-        run: |
-          yes | buildozer android update
-
       - name: Instalar Buildozer
         run: |
           pip install --upgrade pip
           pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.1.21
+
+      - name: Instalar dependencias del proyecto
+        run: |
+          pip install -r requirements.txt
+
+      - name: Verificar dependencias instaladas
+        run: |
+          pip freeze
 
       - name: Guardar en caché el SDK/NDK de Android (acelera las próximas compilaciones)
         uses: actions/cache@v4
@@ -45,30 +49,22 @@ jobs:
             ~/.buildozer
           key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
 
-      - name: Instalar dependencias del proyecto
+      - name: Preparar SDK/NDK
         run: |
-          pip install -r requirements.txt
-  
-      - name: Verificar dependencias instaladas
-        run: |
-          pip freeze
+          yes | python -m buildozer android update
 
       - name: Compilar el APK con Buildozer
         run: |
-          yes | buildozer -v android debug
-      
-      - name: Compilar el APK con Buildozer
-        run: |
-          yes | buildozer -v android debug | tee buildozer-log.txt
-          
-      - name: Publicar log de compilación
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildozer-log
-          path: buildozer-log.txt
+          yes | python -m buildozer -v android debug | tee buildozer-log.txt
 
       - name: Publicar el APK como archivo descargable
         uses: actions/upload-artifact@v4
         with:
           name: AsistenciaZoom-APK
           path: bin/*.apk
+
+      - name: Publicar log de compilación
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-log
+          path: buildozer-log.txt
