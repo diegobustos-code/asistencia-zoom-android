@@ -37,3 +37,4 @@ log_level = 2
 warn_on_root = 1
 android.sdk_path = ~/.buildozer/android/sdk
 android.ndk_path = ~/.buildozer/android/ndk
+
