@@ -32,12 +32,12 @@ fullscreen = 0
 android.permissions = INTERNET
 
 # --- Configuración de compilación de Android ---
-android.api = 33
+android.api = 31
 android.minapi = 21
 # NDK r27 (en vez de r25b): agrega por defecto el alineamiento de 16 KB
 # que exigen los celulares Android 15 más nuevos (como los Honor donde
 # la app se quedaba en pantalla negra / colgada sin ningún error visible).
-android.ndk = 27c
+android.ndk = 25b
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
 android.enable_androidx = True

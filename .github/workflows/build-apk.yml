@@ -28,6 +28,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Preparar SDK/NDK
+        run: |
+          yes | buildozer android update
+
       - name: Instalar Buildozer
         run: |
           pip install --upgrade pip
@@ -44,6 +48,16 @@ jobs:
       - name: Compilar el APK con Buildozer
         run: |
           yes | buildozer -v android debug
+      
+      - name: Compilar el APK con Buildozer
+        run: |
+          yes | buildozer -v android debug | tee buildozer-log.txt
+          
+      - name: Publicar log de compilación
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-log
+          path: buildozer-log.txt
 
       - name: Publicar el APK como archivo descargable
         uses: actions/upload-artifact@v4
