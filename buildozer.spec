@@ -41,7 +41,15 @@ android.ndk = 27c
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
 android.enable_androidx = True
+android.gradle_dependencies = 
+android.add_src = 
+p4a.bootstrap = sdl2
+p4a.local_recipes = ./recipes
+p4a.dist_name = asistenciazoom
 
 [buildozer]
 log_level = 2
 warn_on_root = 1
+# Agrega esto:
+android.sdk_path = ~/.buildozer/android/sdk
+android.ndk_path = ~/.buildozer/android/ndk
