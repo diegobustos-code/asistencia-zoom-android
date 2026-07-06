@@ -43,9 +43,6 @@ android.api = 33
 # (int) Minimum API your APK/App will support
 android.minapi = 21
 
-# (int) Android SDK version to use
-android.sdk = 33
-
 # (str) Android NDK version to use
 android.ndk = 25b
 
@@ -58,8 +55,8 @@ android.accept_sdk_license = True
 # (bool) Enable AndroidX
 android.enable_androidx = True
 
-# (str) The Android arch to build for
-android.arch = arm64-v8a
+# (str) The Android archs to build for
+android.archs = arm64-v8a
 
 # Control passing the --use-setup-py vs --ignore-setup-py to p4a
 p4a.setup_py = false
