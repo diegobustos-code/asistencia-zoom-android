@@ -25,7 +25,7 @@ source.exclude_dirs = tests, bin, __pycache__, .git, .github
 version = 1.0.0
 
 # (list) Application requirements
-requirements = python3,kivy==2.2.1,plyer==2.1.0,openpyxl==3.1.5
+requirements=python3,kivy==2.1.0,plyer==2.1.0,openpyxl==3.1.5
 
 # (str) Supported orientation
 orientation = portrait
