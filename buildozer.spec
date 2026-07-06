@@ -10,7 +10,9 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 1.0
 
 # --- Dependencias que necesita la app dentro del APK ---
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,openpyxl==3.1.5,plyer,pyjnius,et_xmlfile
+# (mismas librerías que usa la versión de escritorio + kivy + plyer para
+# el selector de archivos nativo y el diálogo de "compartir" de Android)
+requirements = python3,kivy==2.3.1,openpyxl==3.1.5,plyer,et_xmlfile
 
 # --- Orientación e íconos ---
 orientation = portrait
@@ -26,6 +28,9 @@ android.permissions = INTERNET
 # --- Configuración de compilación de Android ---
 android.api = 33
 android.minapi = 21
+# NDK r27 (en vez de r25b): agrega por defecto el alineamiento de 16 KB
+# que exigen los celulares Android 15 más nuevos (como los Honor donde
+# la app se quedaba en pantalla negra / colgada sin ningún error visible).
 android.ndk = 27c
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
