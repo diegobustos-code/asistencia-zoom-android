@@ -1,70 +1,45 @@
 [app]
 
-# (str) Title of your application
+# --- Información básica de la app ---
 title = Asistencia Zoom
-
-# (str) Package name
 package.name = asistenciazoom
+package.domain = org.sindicato
 
-# (str) Package domain (needed for android/ios packaging)
-package.domain = org.example
-
-# (str) Source code where the main.py live
 source.dir = .
+source.include_exts = py,png,jpg,kv,atlas
+version = 1.0
 
-# (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas,ttf
+# --- Dependencias que necesita la app dentro del APK ---
+# NOTA: se usa kivy==2.2.1 (no 2.3.1) porque es la combinación más
+# probada y estable junto con python-for-android==2024.1.21 (ver
+# GitHub Actions workflow). Pedir una versión de Kivy más nueva que la
+# que esta "receta" de compilación conoce bien puede armar un paquete
+# incompleto (por ejemplo, faltando el submódulo kivy.input, que fue
+# justamente lo que provocaba que la app se cerrara sola sin error).
+requirements = python3,kivy==2.2.1,openpyxl==3.1.5,plyer==2.1.0,et_xmlfile
 
-# (list) Source files to exclude (let empty to not exclude anything)
-source.exclude_exts = spec
-
-# (list) List of directory names to not include in the distribution
-source.exclude_dirs = tests, bin, __pycache__, .git, .github
-
-# (str) Application versioning
-version = 1.0.0
-
-# (list) Application requirements
-requirements=python3,kivy==2.1.0,plyer==2.1.0,openpyxl==3.1.5
-
-# (str) Supported orientation
+# --- Orientación e íconos ---
 orientation = portrait
-
-#
-# Android Specific
-#
-
-# (bool) Indicate if the application should be fullscreen or not
 fullscreen = 0
+# Si más adelante quieres un ícono propio, descomenta y agrega el archivo:
+# icon.filename = %(source.dir)s/data/icon.png
 
-# (int) Target Android API
+# --- Permisos de Android ---
+# El selector de archivos moderno (Storage Access Framework) y el diálogo
+# de compartir no requieren permisos de almacenamiento en Android 10+.
+android.permissions = INTERNET
+
+# --- Configuración de compilación de Android ---
 android.api = 33
-
-# (int) Minimum API your APK/App will support
 android.minapi = 21
-
-# (str) Android NDK version to use
-android.ndk = 25b
-
-# (int) Android NDK API to use
-android.ndk_api = 21
-
-# (bool) If True, then automatically accept SDK license
-android.accept_sdk_license = True
-
-# (bool) Enable AndroidX
+# NDK r27 (no 25b): agrega por defecto el alineamiento de 16 KB que
+# exigen los celulares Android 15 más nuevos (como los Honor, donde la
+# app se quedaba en pantalla negra / colgada sin ningún error visible).
+android.ndk = 27c
+android.archs = arm64-v8a, armeabi-v7a
+android.allow_backup = True
 android.enable_androidx = True
 
-# (str) The Android archs to build for
-android.archs = arm64-v8a
-
-# Control passing the --use-setup-py vs --ignore-setup-py to p4a
-p4a.setup_py = false
-
 [buildozer]
-
-# (int) Log level (0 = error only, 1 = info, 2 = debug)
 log_level = 2
-
-# (int) Display warning if buildozer is run as root
 warn_on_root = 1

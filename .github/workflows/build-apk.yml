@@ -2,138 +2,51 @@ name: Compilar APK de Android
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   workflow_dispatch: {}
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-
-    env:
-      ANDROID_SDK_ROOT: /opt/android-sdk
-      ANDROID_NDK_ROOT: /opt/android-sdk/ndk/25.1.8937393
-
     steps:
-      # ── 1. Código fuente ─────────────────────────────────────────────
-      - name: Checkout codigo
+      - name: Descargar el código del repositorio
         uses: actions/checkout@v4
 
-      # ── 2. Python ────────────────────────────────────────────────────
-      - name: Configurar Python 3.10
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: '3.11'
 
-      # ── 3. Dependencias del sistema ──────────────────────────────────
       - name: Instalar dependencias del sistema
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            git zip unzip wget curl \
-            openjdk-17-jdk \
-            autoconf automake libtool pkg-config \
-            zlib1g-dev cmake libffi-dev libssl-dev \
-            build-essential libltdl-dev ccache
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev cmake libffi-dev libssl-dev automake build-essential libltdl-dev
 
-      # ── 4. Java 17 ───────────────────────────────────────────────────
       - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'
 
-      # ── 5. Buildozer y dependencias Python ───────────────────────────
-      - name: Instalar Buildozer y dependencias
+      - name: Instalar Buildozer
         run: |
-          python -m pip install --upgrade pip wheel
-          python -m pip install cython buildozer==1.5.0
+          python -m pip install --upgrade pip
+          python -m pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.1.21
 
-      # ── 6. CACHE ─────────────────────────────────────────────────────
-      - name: Restaurar cache SDK / Buildozer
-        id: cache-buildozer
+      - name: Guardar en caché el SDK/NDK de Android (acelera las próximas compilaciones)
         uses: actions/cache@v4
         with:
           path: |
+            .buildozer
             ~/.buildozer
-            /opt/android-sdk
-          key: buildozer-v8-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            buildozer-v8-
+          key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
 
-      # ── 7. SDK + NDK (solo si no hay cache) ──────────────────────────
-      - name: Instalar Android SDK y NDK
-        if: steps.cache-buildozer.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-
-          SDK_ROOT="${ANDROID_SDK_ROOT}"
-          sudo mkdir -p "$SDK_ROOT"
-          sudo chown -R "$USER":"$USER" "$SDK_ROOT"
-
-          wget -q \
-            "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" \
-            -O /tmp/cmdtools.zip
-
-          mkdir -p /tmp/cmdtools_extracted
-          unzip -q /tmp/cmdtools.zip -d /tmp/cmdtools_extracted
-
-          mkdir -p "$SDK_ROOT/cmdline-tools"
-          if [ -d /tmp/cmdtools_extracted/cmdline-tools ]; then
-            mv /tmp/cmdtools_extracted/cmdline-tools \
-               "$SDK_ROOT/cmdline-tools/latest"
-          else
-            mv /tmp/cmdtools_extracted \
-               "$SDK_ROOT/cmdline-tools/latest"
-          fi
-
-          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:\
-          $SDK_ROOT/platform-tools:$PATH"
-
-          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses || true
-
-          sdkmanager --sdk_root="$SDK_ROOT" \
-            "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.2" \
-            "ndk;25.1.8937393"
-
-      # ── 8. Variables de entorno del SDK ──────────────────────────────
-      - name: Exportar variables de entorno del SDK
-        run: |
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"   >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=${ANDROID_NDK_ROOT}"   >> "$GITHUB_ENV"
-          echo "PATH=${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:\
-          ${ANDROID_SDK_ROOT}/platform-tools:${PATH}"   >> "$GITHUB_ENV"
-
-      # ── 9. Verificacion del entorno ───────────────────────────────────
-      - name: Verificar entorno
-        run: |
-          df -h .
-          java -version
-          free -m
-          echo "SDK: ${ANDROID_SDK_ROOT}"
-          ls "${ANDROID_SDK_ROOT}" 2>/dev/null || echo "SDK pendiente"
-          python --version
-
-      # ── 10. Compilar APK con Buildozer ─────────────────────────────
-      - name: Compilar APK con Buildozer
+      - name: Compilar el APK con Buildozer
         run: |
           set -o pipefail
-          python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
+          yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
-      # ── 11. Artefactos generados ──────────────────────────────────────
-      - name: Listar artefactos generados
-        if: always()
-        run: |
-          echo "=== bin/ ==="
-          ls -la bin/ 2>/dev/null || echo "No existe bin/"
-          echo "=== APK encontrados ==="
-          find . -maxdepth 8 -name "*.apk" 2>/dev/null || true
-          echo "=== Ultimas 300 lineas del log ==="
-          tail -n 300 buildozer-log.txt || true
-
-      # ── 12. Subir APK y log ───────────────────────────────────────────
-      - name: Subir APK y log
+      - name: Publicar el APK y el log completo como archivos descargables
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -141,4 +54,3 @@ jobs:
           path: |
             bin/*.apk
             buildozer-log.txt
-          if-no-files-found: warn
