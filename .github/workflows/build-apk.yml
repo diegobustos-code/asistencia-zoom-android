@@ -15,7 +15,7 @@ jobs:
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
       - name: Instalar dependencias del sistema
         run: |
@@ -37,9 +37,11 @@ jobs:
       - name: Instalar Buildozer y dependencias
         run: |
           pip install --upgrade pip setuptools wheel
-          pip install cython==0.29.36
+          pip install cython==0.29.33
           pip install buildozer==1.5.0
           pip install python-for-android==2024.1.21
+          # Instalar Kivy en el entorno host para que p4a/Cython encuentre config.pxi
+          pip install kivy==2.2.1
 
       - name: Compilar el APK con Buildozer
         run: |
