@@ -32,11 +32,14 @@ jobs:
         run: |
           rm -rf .buildozer
           rm -rf ~/.buildozer
+          rm -rf ~/.cache/pip
 
-      - name: Instalar Buildozer
+      - name: Instalar Buildozer y dependencias
         run: |
-          pip install --upgrade pip
-          pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.1.21
+          pip install --upgrade pip setuptools wheel
+          pip install cython==0.29.36
+          pip install buildozer==1.5.0
+          pip install python-for-android==2024.1.21
 
       - name: Compilar el APK con Buildozer
         run: |
