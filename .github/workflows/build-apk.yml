@@ -19,10 +19,10 @@ jobs:
         uses: actions/checkout@v4
 
       # ── 2. Python ────────────────────────────────────────────────────
-      - name: Configurar Python 3.12
+      - name: Configurar Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.10"
 
       # ── 3. Dependencias del sistema ──────────────────────────────────
       - name: Instalar dependencias del sistema
@@ -33,7 +33,10 @@ jobs:
             openjdk-17-jdk \
             autoconf automake libtool pkg-config \
             zlib1g-dev cmake libffi-dev libssl-dev \
-            build-essential libltdl-dev ccache
+            build-essential libltdl-dev ccache \
+            libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev libsdl2-mixer-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libpango1.0-dev
 
       # ── 4. Java 17 ───────────────────────────────────────────────────
       - name: Configurar Java 17
@@ -43,17 +46,16 @@ jobs:
           java-version: "17"
 
       # ── 5. Buildozer y dependencias Python ───────────────────────────
-      # NOTA: Usamos el Python 3.12 que viene con el runner (no instalamos paquetes extra)
-      - name: Instalar Buildozer y dependencias Python
+      # IMPORTANTE: NO instalamos kivy aquí, solo buildozer y cython
+      - name: Instalar Buildozer y dependencias
         run: |
           python -m pip install --upgrade pip wheel
           python -m pip install \
             buildozer==1.5.0 \
             cython==3.0.11 \
             python-for-android==2024.1.21
-          python -m pip install -r requirements.txt
 
-      # ── 6. CACHE — IMPORTANTE: la clave incluye la version de Kivy ───
+      # ── 6. CACHE ─────────────────────────────────────────────────────
       - name: Restaurar cache SDK / Buildozer
         id: cache-buildozer
         uses: actions/cache@v4
@@ -61,9 +63,9 @@ jobs:
           path: |
             ~/.buildozer
             /opt/android-sdk
-          key: buildozer-v6-${{ hashFiles('buildozer.spec', 'requirements.txt') }}
+          key: buildozer-v7-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            buildozer-v6-
+            buildozer-v7-
 
       # ── 7. SDK + NDK (solo si no hay cache) ──────────────────────────
       - name: Instalar Android SDK y NDK
@@ -118,15 +120,14 @@ jobs:
           free -m
           echo "SDK: ${ANDROID_SDK_ROOT}"
           ls "${ANDROID_SDK_ROOT}" 2>/dev/null || echo "SDK pendiente"
-          python -c "import kivy; print('kivy:', kivy.__version__)"
-          python -c "import cython; print('cython:', cython.__version__)"
           python --version
+          which buildozer || echo "buildozer no esta en PATH, usaremos python -m buildozer"
 
       # ── 10. Compilar APK con Buildozer ─────────────────────────────
       - name: Compilar APK con Buildozer
         run: |
           set -o pipefail
-          yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
+          python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
       # ── 11. Artefactos generados ──────────────────────────────────────
       - name: Listar artefactos generados
