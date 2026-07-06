@@ -10,13 +10,17 @@ source.include_exts = py,png,jpg,kv,atlas
 version = 1.0
 
 # --- Dependencias que necesita la app dentro del APK ---
-# NOTA: se usa kivy==2.2.1 (no 2.3.1) porque es la combinación más
+# NOTA: se fija "python3==3.11.6" explícitamente. Sin esto,
+# python-for-android puede elegir automáticamente la versión de Python
+# más nueva disponible (ej. 3.14) para compilar, la cual eliminó módulos
+# viejos como "cgi" que todavía usan algunas herramientas de empaquetado
+# de Kivy/Cython, rompiendo la compilación con errores como
+# "ModuleNotFoundError: No module named 'cgi'". Python 3.11 es la
+# versión ampliamente probada y estable para este tipo de compilación.
+# También se usa kivy==2.2.1 (no 2.3.1) porque es la combinación más
 # probada y estable junto con python-for-android==2024.1.21 (ver
-# GitHub Actions workflow). Pedir una versión de Kivy más nueva que la
-# que esta "receta" de compilación conoce bien puede armar un paquete
-# incompleto (por ejemplo, faltando el submódulo kivy.input, que fue
-# justamente lo que provocaba que la app se cerrara sola sin error).
-requirements = python3,kivy==2.2.1,openpyxl==3.1.5,plyer==2.1.0,et_xmlfile
+# GitHub Actions workflow).
+requirements = python3==3.11.6,kivy==2.2.1,openpyxl==3.1.5,plyer==2.1.0,et_xmlfile
 
 # --- Orientación e íconos ---
 orientation = portrait
