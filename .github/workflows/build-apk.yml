@@ -42,10 +42,11 @@ jobs:
           python -m pip freeze
 
       - name: Preparar Android SDK commandline-tools y aceptar licencias
-        env:
-          SDK_ROOT: ${{ runner.temp }}/android-sdk
         run: |
           set -euo pipefail
+
+          # Use runner-provided temp dir
+          SDK_ROOT="$RUNNER_TEMP/android-sdk"
           mkdir -p "$SDK_ROOT"
           cd "$SDK_ROOT"
 
@@ -54,17 +55,27 @@ jobs:
             wget -q "https://dl.google.com/android/repository/${CLI_ZIP}"
           fi
 
-          mkdir -p cmdline-tools
+          # Unzip into a temporary folder
+          mkdir -p cmdline-tools/tmp
           unzip -q -o "$CLI_ZIP" -d cmdline-tools/tmp
-          rm -rf cmdline-tools/latest || true
-          mv cmdline-tools/tmp/cmdline-tools cmdline-tools/latest
+
+          # Robust move: detect extracted folder name and move it to cmdline-tools/latest
+          EXTRACTED_DIR=$(find cmdline-tools/tmp -maxdepth 1 -type d -not -path 'cmdline-tools/tmp' -printf '%f\n' | head -n 1 || true)
+          if [ -z "$EXTRACTED_DIR" ]; then
+            # fallback: maybe zip extracted files directly; create expected layout
+            mkdir -p cmdline-tools/latest
+            mv cmdline-tools/tmp/* cmdline-tools/latest/ || true
+          else
+            rm -rf cmdline-tools/latest || true
+            mv "cmdline-tools/tmp/$EXTRACTED_DIR" cmdline-tools/latest
+          fi
 
           export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$PATH"
 
-          # Aceptar licencias no interactivamente
+          # Accept licenses non-interactively
           yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses || true
 
-          # Instalar platform-tools, build-tools y una plataforma base
+          # Install minimal required components (Buildozer/p4a may still download more)
           sdkmanager --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-31" "build-tools;31.0.0" || true
 
       - name: Guardar en caché el SDK/NDK y Buildozer
@@ -73,7 +84,7 @@ jobs:
           path: |
             .buildozer
             ~/.buildozer
-            ${{ runner.temp }}/android-sdk
+            $RUNNER_TEMP/android-sdk
           key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
 
       - name: Comprobar espacio y Java
@@ -83,12 +94,8 @@ jobs:
           free -m
 
       - name: Compilar el APK con Buildozer
-        env:
-          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
-          ANDROID_HOME: ${{ runner.temp }}/android-sdk
         run: |
           set -o pipefail
-          # Ejecutar buildozer desde el módulo para evitar "command not found"
           yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
       - name: Listar archivos generados
