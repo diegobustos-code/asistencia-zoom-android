@@ -23,7 +23,7 @@ android.permissions = INTERNET
 # --- Configuración de compilación de Android ---
 android.api = 31
 android.minapi = 21
-# Recomiendo NDK r25b o r27c según compatibilidad; python-for-android 2024.1.21 funciona bien con r25b/r27c.
+# NDK recomendado: r25b o r27c según compatibilidad con python-for-android
 android.ndk = 25b
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
@@ -37,4 +37,3 @@ log_level = 2
 warn_on_root = 1
 android.sdk_path = ~/.buildozer/android/sdk
 android.ndk_path = ~/.buildozer/android/ndk
-
