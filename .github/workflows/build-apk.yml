@@ -40,8 +40,31 @@ jobs:
           pip install cython==0.29.33
           pip install buildozer==1.5.0
           pip install python-for-android==2024.1.21
-          # Instalar Kivy en el entorno host para que p4a/Cython encuentre config.pxi
           pip install kivy==2.2.1
+
+      - name: Generar archivos de configuración de Kivy para Cython
+        run: |
+          python -c "import kivy; from kivy.cython import install; install()" || true
+          # Alternativa: copiar config.pxi desde el directorio de Kivy instalado
+          python << 'EOF'
+          import os
+          import shutil
+          from pathlib import Path
+          
+          # Encontrar la ruta de instalación de Kivy
+          import kivy
+          kivy_path = Path(kivy.__file__).parent
+          
+          # Crear directorio de caché de p4a si no existe
+          p4a_cache = Path.home() / ".buildozer" / "cache" / "p4a"
+          p4a_cache.mkdir(parents=True, exist_ok=True)
+          
+          # Copiar los archivos .pxi si existen
+          config_pxi = kivy_path / "core" / "config.pxi"
+          if config_pxi.exists():
+              shutil.copy(config_pxi, p4a_cache / "config.pxi")
+              print(f"Copiado {config_pxi} a {p4a_cache}")
+          EOF
 
       - name: Compilar el APK con Buildozer
         run: |
