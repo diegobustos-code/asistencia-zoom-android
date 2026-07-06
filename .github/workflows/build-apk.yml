@@ -33,8 +33,7 @@ jobs:
             openjdk-17-jdk \
             autoconf automake libtool pkg-config \
             zlib1g-dev cmake libffi-dev libssl-dev \
-            build-essential libltdl-dev ccache \
-            python3.12-venv python3.12-dev
+            build-essential libltdl-dev ccache
 
       # ── 4. Java 17 ───────────────────────────────────────────────────
       - name: Configurar Java 17
@@ -44,21 +43,15 @@ jobs:
           java-version: "17"
 
       # ── 5. Buildozer y dependencias Python ───────────────────────────
+      # NOTA: Usamos el Python 3.12 que viene con el runner (no instalamos paquetes extra)
       - name: Instalar Buildozer y dependencias Python
         run: |
-          # Crear entorno virtual con Python 3.12
-          python3.12 -m venv buildozer-venv
-          source buildozer-venv/bin/activate
-          
           python -m pip install --upgrade pip wheel
           python -m pip install \
             buildozer==1.5.0 \
             cython==3.0.11 \
             python-for-android==2024.1.21
           python -m pip install -r requirements.txt
-          
-          # Guardar ruta del venv para usarla después
-          echo "BUILDOZER_VENV=$(pwd)/buildozer-venv/bin/activate" >> $GITHUB_ENV
 
       # ── 6. CACHE — IMPORTANTE: la clave incluye la version de Kivy ───
       - name: Restaurar cache SDK / Buildozer
@@ -125,14 +118,13 @@ jobs:
           free -m
           echo "SDK: ${ANDROID_SDK_ROOT}"
           ls "${ANDROID_SDK_ROOT}" 2>/dev/null || echo "SDK pendiente"
-          source buildozer-venv/bin/activate
           python -c "import kivy; print('kivy:', kivy.__version__)"
           python -c "import cython; print('cython:', cython.__version__)"
+          python --version
 
       # ── 10. Compilar APK con Buildozer ─────────────────────────────
       - name: Compilar APK con Buildozer
         run: |
-          source buildozer-venv/bin/activate
           set -o pipefail
           yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
