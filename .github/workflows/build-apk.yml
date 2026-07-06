@@ -40,6 +40,10 @@ jobs:
             .buildozer
             ~/.buildozer
           key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
+          
+      - name: Verificar dependencias instaladas
+        run: |
+          pip freeze
 
       - name: Compilar el APK con Buildozer
         run: |
