@@ -12,7 +12,13 @@ version = 1.0
 # --- Dependencias que necesita la app dentro del APK ---
 # (mismas librerías que usa la versión de escritorio + kivy + plyer para
 # el selector de archivos nativo y el diálogo de "compartir" de Android)
-requirements = python3,kivy==2.3.1,openpyxl==3.1.5,plyer,et_xmlfile
+# NOTA: se usa kivy==2.2.1 (no 2.3.1) porque es la combinación más
+# probada y estable junto con python-for-android==2024.1.21 (ver
+# GitHub Actions workflow). Pedir una versión de Kivy más nueva que la
+# que esta "receta" de compilación conoce bien puede armar un paquete
+# incompleto (por ejemplo, faltando el submódulo kivy.input, que es
+# justamente lo que provocaba que la app se cerrara sola sin error).
+requirements = python3,kivy==2.2.1,openpyxl==3.1.5,plyer,et_xmlfile
 
 # --- Orientación e íconos ---
 orientation = portrait

@@ -103,37 +103,53 @@ rondas anteriores:
    vez; se agregó el paso `actions/setup-java@v4` para forzar Java 17.
    **Confirmado que esto funcionó**: con este cambio, la compilación
    llegó hasta el final y generó el APK instalable.
-5. **La app se instala pero se cierra/queda en segundo plano sin ningún
-   error visible en el celular** (problema actual) — los celulares
-   Honor/Huawei de prueba bloquean el acceso a `logcat` para apps de
-   terceros, así que no hay forma de ver el error con las herramientas
-   normales de depuración. Se probó actualizar el NDK a una versión más
-   reciente (compatible con el requisito de "páginas de memoria de 16 KB"
-   de Android 15) sin éxito visible. **Se descartó que sea un problema de
-   `openpyxl` faltante** (se confirmó en el log que se instaló
-   correctamente).
+5. **La app se instalaba pero se cerraba/quedaba en segundo plano sin
+   ningún error visible en el celular.** Los celulares Honor/Huawei de
+   prueba bloquean el acceso a `logcat` para apps de terceros. Se probó
+   primero actualizar el NDK (sin efecto visible), y se agregó una
+   pantalla de error visible en la propia app como herramienta de
+   diagnóstico (ver más abajo). **Se terminó de diagnosticar probando en
+   BlueStacks** (que sí permite logcat sin restricciones), revelando el
+   error real:
+   ```
+   ModuleNotFoundError: No module named 'kivy.input'
+   [CRITICAL] [App] Unable to get a Window, abort.
+   ```
+   Causa: se había pedido `kivy==2.3.1`, una versión más nueva de la que
+   la "receta" de compilación de `python-for-android==2024.1.21` sabe
+   armar de forma completa — terminaba empaquetando un Kivy incompleto,
+   sin el submódulo `kivy.input` (necesario para crear la ventana).
+   **Corregido** bajando a `kivy==2.2.1`, la combinación más probada y
+   estable junto con esa versión de python-for-android.
 
-## La nueva herramienta de diagnóstico: pantalla de error visible
+## La herramienta de diagnóstico que hizo posible encontrar esto
 
-Como no se puede ver el log en estos celulares, se modificó la app para
-que, si algo fallara al iniciar (incluso un error de importación de
-alguna librería), en vez de cerrarse en silencio **muestre el error como
-texto en la pantalla completa del celular**, con instrucciones de sacarle
-una foto.
+Se modificó la app (`main.py` + `app_core.py`) para que, si algo fallara
+al iniciar, en vez de cerrarse en silencio, muestre el error como texto
+en pantalla completa. Esta vez el error de Kivy ocurrió tan temprano
+(antes de que la propia ventana pudiera crearse) que ni siquiera esa
+pantalla de emergencia alcanzó a mostrarse — pero gracias a poder ver el
+log completo en BlueStacks (sin las restricciones de Honor/Huawei),
+igual se pudo encontrar la causa exacta. Una vez arreglado este problema
+de raíz, esa pantalla de emergencia queda funcionando normalmente como
+red de seguridad para cualquier error futuro.
 
-**Esto es clave para el siguiente paso**: cuando instales esta nueva
-versión del APK,
-- Si la pantalla de error **aparece**: perfecto, sácale una foto completa
-  (usa el scroll si el texto no entra todo) y compártela — con eso vamos
-  a saber exactamente qué corregir, con certeza, en vez de adivinar.
-- Si la app **sigue haciendo lo mismo de antes** (se cierra/queda en
-  segundo plano SIN mostrar ni siquiera esta pantalla de error): es una
-  señal importante también — significa que el problema ocurre en un nivel
-  más profundo que el propio código Python (probablemente algo nativo de
-  Android/gráficos, antes de que Python alcance a ejecutar nuestro código
-  de manejo de errores). Avísame si pasa esto para probar el siguiente
-  ajuste (por ejemplo, cambiar la versión de SDL2/Kivy usada, o el modo de
-  arranque de la app).
+## Tips de depuración (por si hace falta en el futuro)
 
-Cualquiera de los dos resultados nos da información útil — ya no
-estaríamos a ciegas.
+- **BlueStacks es mejor que un celular Honor/Huawei para depurar**: estos
+  fabricantes bloquean el acceso a `logcat` de apps de terceros incluso
+  por USB. BlueStacks no tiene esa restricción.
+- Para conectar `adb` a BlueStacks: actívalo en BlueStacks (Configuración
+  → Avanzado → Android Debug Bridge), luego `.\adb connect 127.0.0.1:5555`.
+- Si tienes más de un dispositivo/emulador conectado a la vez, `adb` se
+  confunde — usa `.\adb -s 127.0.0.1:5555 logcat` (indicando cuál) o
+  desconecta los demás.
+- **Cuidado con PowerShell y `>` para guardar logs**: por defecto guarda
+  el archivo en UTF-16, no en texto plano, así que buscar palabras con
+  Ctrl+F en el Bloc de notas puede no funcionar bien. Si pasa esto, se
+  puede convertir a UTF-8 o simplemente compartir el archivo para
+  revisarlo con otra herramienta.
+- Busca siempre por el tag `python` en el logcat — ahí es donde aparecen
+  los tracebacks reales de la app.
+
+## Cómo adaptar el programa si Zoom cambia el formato del CSV
