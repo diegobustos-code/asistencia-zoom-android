@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
-      ANDROID_HOME: ${{ runner.temp }}/android-sdk
     steps:
       - name: Descargar el código del repositorio
         uses: actions/checkout@v4
@@ -45,9 +42,10 @@ jobs:
           python -m pip freeze
 
       - name: Preparar Android SDK commandline-tools y aceptar licencias
+        env:
+          SDK_ROOT: ${{ runner.temp }}/android-sdk
         run: |
-          set -e
-          SDK_ROOT="${ANDROID_SDK_ROOT}"
+          set -euo pipefail
           mkdir -p "$SDK_ROOT"
           cd "$SDK_ROOT"
 
@@ -61,10 +59,12 @@ jobs:
           rm -rf cmdline-tools/latest || true
           mv cmdline-tools/tmp/cmdline-tools cmdline-tools/latest
 
-          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$PATH"
 
+          # Aceptar licencias no interactivamente
           yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses || true
+
+          # Instalar platform-tools, build-tools y una plataforma base
           sdkmanager --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-31" "build-tools;31.0.0" || true
 
       - name: Guardar en caché el SDK/NDK y Buildozer
@@ -83,8 +83,12 @@ jobs:
           free -m
 
       - name: Compilar el APK con Buildozer
+        env:
+          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+          ANDROID_HOME: ${{ runner.temp }}/android-sdk
         run: |
           set -o pipefail
+          # Ejecutar buildozer desde el módulo para evitar "command not found"
           yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
       - name: Listar archivos generados
@@ -104,5 +108,3 @@ jobs:
           path: |
             bin
             buildozer-log.txt
-
-            
