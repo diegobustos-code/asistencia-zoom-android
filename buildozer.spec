@@ -23,6 +23,7 @@ android.permissions = INTERNET
 # --- Configuración de compilación de Android ---
 android.api = 31
 android.minapi = 21
+# Recomiendo NDK r25b o r27c según compatibilidad; python-for-android 2024.1.21 funciona bien con r25b/r27c.
 android.ndk = 25b
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True

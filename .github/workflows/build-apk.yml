@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+      ANDROID_HOME: ${{ runner.temp }}/android-sdk
     steps:
       - name: Descargar el código del repositorio
         uses: actions/checkout@v4
@@ -20,7 +23,7 @@ jobs:
       - name: Instalar dependencias del sistema
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev cmake libffi-dev libssl-dev automake build-essential libltdl-dev
+          sudo apt-get install -y git zip unzip wget openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev cmake libffi-dev libssl-dev automake build-essential libltdl-dev
 
       - name: Configurar Java 17
         uses: actions/setup-java@v4
@@ -28,25 +31,49 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Instalar Buildozer y herramientas Python necesarias
+      - name: Instalar Buildozer y python-for-android
         run: |
-          pip install --upgrade pip
-          pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.1.21
+          python -m pip install --upgrade pip
+          python -m pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.1.21
 
       - name: Instalar dependencias del proyecto
         run: |
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
 
       - name: Verificar dependencias instaladas
         run: |
-          pip freeze
+          python -m pip freeze
 
-      - name: Guardar en caché el SDK/NDK de Android
+      - name: Preparar Android SDK commandline-tools y aceptar licencias
+        run: |
+          set -e
+          SDK_ROOT="${ANDROID_SDK_ROOT}"
+          mkdir -p "$SDK_ROOT"
+          cd "$SDK_ROOT"
+
+          CLI_ZIP="commandlinetools-linux-6514223_latest.zip"
+          if [ ! -f "$CLI_ZIP" ]; then
+            wget -q "https://dl.google.com/android/repository/${CLI_ZIP}"
+          fi
+
+          mkdir -p cmdline-tools
+          unzip -q -o "$CLI_ZIP" -d cmdline-tools/tmp
+          rm -rf cmdline-tools/latest || true
+          mv cmdline-tools/tmp/cmdline-tools cmdline-tools/latest
+
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+
+          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses || true
+          sdkmanager --sdk_root="$SDK_ROOT" "platform-tools" "platforms;android-31" "build-tools;31.0.0" || true
+
+      - name: Guardar en caché el SDK/NDK y Buildozer
         uses: actions/cache@v4
         with:
           path: |
             .buildozer
             ~/.buildozer
+            ${{ runner.temp }}/android-sdk
           key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
 
       - name: Comprobar espacio y Java
@@ -55,18 +82,25 @@ jobs:
           java -version
           free -m
 
-      - name: Compilar el APK con Buildozer (descarga SDK/NDK durante build)
+      - name: Compilar el APK con Buildozer
         run: |
-          yes | python -m buildozer -v android debug | tee buildozer-log.txt
+          set -o pipefail
+          yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
-      - name: Publicar el APK como archivo descargable
+      - name: Listar archivos generados
+        run: |
+          echo "Contenido de bin/ (si existe):"
+          ls -la bin || true
+          echo "Buscar APK/AAB en el repo (hasta 6 niveles):"
+          find . -maxdepth 6 -type f \( -iname "*.apk" -o -iname "*.aab" \) -print || true
+          echo "Últimas 200 líneas del log de buildozer:"
+          tail -n 200 buildozer-log.txt || true
+
+      - name: Subir carpeta bin completa y log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AsistenciaZoom-APK
-          path: bin/*.apk
-
-      - name: Publicar log de compilación
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildozer-log
-          path: buildozer-log.txt
+          name: AsistenciaZoom-build-artifacts
+          path: |
+            bin
+            buildozer-log.txt
