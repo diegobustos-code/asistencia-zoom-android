@@ -15,7 +15,7 @@ requirements = python3,kivy==2.2.1,plyer==2.1.0,openpyxl==3.1.5,et_xmlfile
 # --- Orientación e íconos ---
 orientation = portrait
 fullscreen = 0
-# icon.filename = %(source.dir)s/data/icon.png   # descomenta si agregas ícono propio
+# icon.filename = %(source.dir)s/data/icon.png
 
 # --- Permisos de Android ---
 android.permissions = INTERNET
