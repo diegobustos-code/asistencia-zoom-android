@@ -39,10 +39,17 @@ android.permissions = INTERNET
 # --- Configuración de compilación de Android ---
 android.api = 33
 android.minapi = 21
-# NDK r27 (no 25b): agrega por defecto el alineamiento de 16 KB que
-# exigen los celulares Android 15 más nuevos (como los Honor, donde la
-# app se quedaba en pantalla negra / colgada sin ningún error visible).
-android.ndk = 27c
+# NDK 25b: es el recomendado y probado por python-for-android v2024.01.21
+# (el propio log de compilación lo confirma: "Recommended android's NDK
+# version by p4a is: 25b"). Se había probado subir a NDK 27c pensando en
+# el requisito de "páginas de memoria de 16 KB" de Android 15, pero esa
+# versión de NDK es INCOMPATIBLE con el código SDL2 que trae empaquetado
+# esta versión de p4a (falla con "'ALooper_pollAll' is unavailable").
+# Como la causa real y CONFIRMADA del crash original fue el problema de
+# kivy.input (ya resuelto bajando a kivy==2.2.1), y la teoría de las
+# páginas de 16 KB nunca se llegó a confirmar, se vuelve al NDK que esta
+# versión de p4a realmente soporta.
+android.ndk = 25b
 android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
 android.enable_androidx = True
