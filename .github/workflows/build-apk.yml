@@ -33,10 +33,7 @@ jobs:
             openjdk-17-jdk \
             autoconf automake libtool pkg-config \
             zlib1g-dev cmake libffi-dev libssl-dev \
-            build-essential libltdl-dev ccache \
-            libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev libsdl2-mixer-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libpango1.0-dev
+            build-essential libltdl-dev ccache
 
       # ── 4. Java 17 ───────────────────────────────────────────────────
       - name: Configurar Java 17
@@ -46,14 +43,10 @@ jobs:
           java-version: "17"
 
       # ── 5. Buildozer y dependencias Python ───────────────────────────
-      # IMPORTANTE: NO instalamos kivy aquí, solo buildozer y cython
       - name: Instalar Buildozer y dependencias
         run: |
           python -m pip install --upgrade pip wheel
-          python -m pip install \
-            buildozer==1.5.0 \
-            cython==3.0.11 \
-            python-for-android==2024.1.21
+          python -m pip install buildozer==1.5.0
 
       # ── 6. CACHE ─────────────────────────────────────────────────────
       - name: Restaurar cache SDK / Buildozer
@@ -63,9 +56,9 @@ jobs:
           path: |
             ~/.buildozer
             /opt/android-sdk
-          key: buildozer-v7-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-v8-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            buildozer-v7-
+            buildozer-v8-
 
       # ── 7. SDK + NDK (solo si no hay cache) ──────────────────────────
       - name: Instalar Android SDK y NDK
@@ -121,7 +114,6 @@ jobs:
           echo "SDK: ${ANDROID_SDK_ROOT}"
           ls "${ANDROID_SDK_ROOT}" 2>/dev/null || echo "SDK pendiente"
           python --version
-          which buildozer || echo "buildozer no esta en PATH, usaremos python -m buildozer"
 
       # ── 10. Compilar APK con Buildozer ─────────────────────────────
       - name: Compilar APK con Buildozer
