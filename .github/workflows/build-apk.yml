@@ -40,7 +40,11 @@ jobs:
             .buildozer
             ~/.buildozer
           key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
-          
+
+      - name: Instalar dependencias del proyecto
+        run: |
+          pip install -r requirements.txt
+  
       - name: Verificar dependencias instaladas
         run: |
           pip freeze
