@@ -673,16 +673,81 @@ class ZoomAttendanceMobileApp(App):
         return path
 
     def _share_file(self, filepath, title):
+        """Guarda una copia del archivo exportado en la carpeta PÚBLICA
+        'Download' del celular (visible con cualquier explorador de
+        archivos, sin depender de que el diálogo de compartir se abra
+        correctamente) y, además, intenta abrir el diálogo nativo de
+        Android para compartir directamente (WhatsApp, Drive, correo,
+        etc.).
+
+        Por qué hace falta copiarlo a Download aparte de intentar
+        compartir: desde Android 10 en adelante, la carpeta privada de
+        la app (`user_data_dir`, algo como
+        "/data/user/0/<paquete>/files") NO es visible para ningún
+        explorador de archivos ni para otras apps — solo la puede leer
+        esta misma app. Si el diálogo de compartir no llega a abrirse
+        (como pasó recién), el archivo quedaba "guardado" pero
+        inalcanzable. Copiándolo también a la carpeta pública Download
+        (usando la API de almacenamiento compartido de Android, la
+        única forma permitida de escribir ahí desde Android 10+) el
+        archivo queda accesible sí o sí, se abra o no el diálogo de
+        compartir."""
+        from kivy.utils import platform
+
+        saved_to_downloads = False
+        if platform == "android":
+            saved_to_downloads = self._copy_to_public_downloads(filepath)
+
+        shared_ok = False
         try:
             from plyer import share
             share.share(title=title, filepath=filepath)
+            shared_ok = True
         except Exception:
+            shared_ok = False
+
+        if shared_ok:
+            return
+
+        if saved_to_downloads:
+            _show_popup(
+                "Archivo guardado",
+                "El archivo se guardó en la carpeta 'Download' de tu "
+                "celular, con el nombre:\n" + os.path.basename(filepath) +
+                "\n\nNo se pudo abrir el diálogo para compartir "
+                "automáticamente, pero puedes encontrarlo con cualquier "
+                "explorador de archivos, dentro de la carpeta Download.",
+            )
+        else:
             _show_popup(
                 "Archivo generado",
                 f"El archivo se guardó en:\n{filepath}\n\n"
-                "No se pudo abrir el diálogo para compartir automáticamente; "
-                "puedes buscarlo con un explorador de archivos.",
+                "No se pudo copiarlo a la carpeta Download ni abrir el "
+                "diálogo para compartir automáticamente; puedes buscarlo "
+                "con un explorador de archivos.",
             )
+
+    def _copy_to_public_downloads(self, filepath):
+        """Copia `filepath` (que vive en la carpeta privada de la app) a
+        la carpeta pública 'Download' del celular, usando la API de
+        almacenamiento compartido de Android (MediaStore vía el paquete
+        androidstorage4kivy). Esta es la única forma soportada de
+        escribir en una carpeta pública desde Android 10 en adelante;
+        escribir ahí con un simple open()/os.path como si fuera una
+        carpeta común ya no funciona en versiones modernas de Android.
+        Devuelve True si la copia se hizo con éxito, False si algo
+        falló (por ejemplo, en un celular muy viejo o si el paquete no
+        se pudo cargar)."""
+        try:
+            from androidstorage4kivy import SharedStorage
+            from jnius import autoclass
+            Environment = autoclass("android.os.Environment")
+            shared_file = SharedStorage().copy_to_shared(
+                filepath, collection=Environment.DIRECTORY_DOWNLOADS
+            )
+            return shared_file is not None
+        except Exception:
+            return False
 
     def export_csv(self):
         if not self.filtered_records:

@@ -23,7 +23,15 @@ version = 1.0
 # También se usa kivy==2.2.1 (no 2.3.1) porque es la combinación más
 # probada y estable junto con python-for-android==2024.1.21 (ver
 # GitHub Actions workflow).
-requirements = python3==3.11.6,hostpython3==3.11.6,kivy==2.2.1,openpyxl==3.1.5,plyer==2.1.0,et_xmlfile
+# Se agrega "androidstorage4kivy": es un paquete Python puro (sin
+# compilación nativa propia, así que no agrega riesgo de romper la
+# compilación) que permite copiar los archivos exportados a la carpeta
+# PÚBLICA "Download" del celular. Es necesario porque desde Android 10
+# en adelante ya no se puede escribir directamente en carpetas públicas
+# con un simple open()/os.path — hay que pasar por la API oficial de
+# almacenamiento compartido de Android, que es justo lo que envuelve
+# este paquete.
+requirements = python3==3.11.6,hostpython3==3.11.6,kivy==2.2.1,openpyxl==3.1.5,plyer==2.1.0,et_xmlfile,androidstorage4kivy
 
 # --- Orientación e íconos ---
 # "portrait" bloqueaba la rotación por completo (el celular ignoraba el
