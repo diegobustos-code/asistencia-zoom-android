@@ -42,8 +42,10 @@ requirements = python3==3.11.6,hostpython3==3.11.6,kivy==2.2.1,openpyxl==3.1.5,p
 # reconoce: "portrait,landscape".
 orientation = portrait,landscape
 fullscreen = 0
-# Si más adelante quieres un ícono propio, descomenta y agrega el archivo:
-# icon.filename = %(source.dir)s/data/icon.png
+# Ícono de la app y pantalla de carga: el logo del sindicato
+# (logo.png, debe estar en la misma carpeta que main.py/buildozer.spec).
+icon.filename = %(source.dir)s/logo.png
+presplash.filename = %(source.dir)s/logo.png
 
 # --- Permisos de Android ---
 # El selector de archivos moderno (Storage Access Framework) y el diálogo

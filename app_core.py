@@ -32,6 +32,7 @@ from kivy.uix.button import Button
 from kivy.uix.popup import Popup
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.label import Label
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
 # Debe coincidir EXACTAMENTE con "title = ..." en buildozer.spec. Se usa
@@ -69,7 +70,10 @@ KV = """
     background_color: 0, 0, 0, 0
     color: 1, 1, 1, 1
     bold: True
-    font_size: "13.5sp" if app.landscape else "15sp"
+    font_size: "12sp" if app.landscape else "12.5sp"
+    halign: "center"
+    valign: "middle"
+    text_size: self.width - dp(10), None
     canvas.before:
         Color:
             rgba: (0.68, 0.70, 0.73, 1) if self.disabled else self.button_color
@@ -199,7 +203,8 @@ BoxLayout:
             BoxLayout:
                 size_hint_y: None
                 height: dp(34)
-                spacing: dp(6)
+                spacing: dp(8)
+                padding: dp(4), 0
                 canvas.before:
                     Color:
                         rgba: 0.87, 0.91, 0.97, 1
@@ -207,13 +212,19 @@ BoxLayout:
                         pos: self.pos
                         size: self.size
                         radius: [dp(8)]
+                Image:
+                    source: "logo.png"
+                    size_hint_x: None
+                    width: dp(28)
+                    allow_stretch: True
+                    keep_ratio: True
                 Label:
                     text: "Mes: " + (app.attendance_month if app.attendance_month else "(sin definir)")
                     color: 0.14, 0.22, 0.34, 1
                     bold: True
                     font_size: "13sp"
                     text_size: self.size
-                    padding: dp(10), 0
+                    padding: dp(4), 0
                     halign: "left"
                     valign: "middle"
                     shorten: True
@@ -404,12 +415,38 @@ class RowWidget(RecycleDataViewBehavior, BoxLayout):
 
 
 def _show_popup(title: str, message: str) -> None:
-    box = BoxLayout(orientation="vertical", padding=10, spacing=10)
-    box.add_widget(Label(text=message))
-    from kivy.uix.button import Button
-    close_btn = Button(text="Cerrar", size_hint_y=None, height=44)
+    box = BoxLayout(orientation="vertical", padding=dp(14), spacing=dp(10))
+
+    scroll = ScrollView(do_scroll_x=False)
+    msg_label = Label(
+        text=message,
+        color=(0.15, 0.15, 0.15, 1),
+        halign="left",
+        valign="top",
+        size_hint_y=None,
+        markup=False,
+    )
+    # El texto de un Label no se ajusta a varias líneas por sí solo: hay
+    # que decirle explícitamente el ancho disponible (text_size) para
+    # que "envuelva" el texto en vez de estirarse en una sola línea
+    # gigante que termina cortada/invisible fuera de la pantalla (que es
+    # justo lo que se veía en el popup "Archivo guardado"). Al atar
+    # text_size y height al ancho/alto real del Label, esto se ajusta
+    # solo sin importar el tamaño de pantalla ni cuán largo sea el
+    # mensaje.
+    def _sync_text_size(instance, value):
+        instance.text_size = (instance.width, None)
+
+    def _sync_height(instance, value):
+        instance.height = instance.texture_size[1]
+
+    msg_label.bind(width=_sync_text_size, texture_size=_sync_height)
+    scroll.add_widget(msg_label)
+    box.add_widget(scroll)
+
+    close_btn = Button(text="Cerrar", size_hint_y=None, height=dp(44))
     box.add_widget(close_btn)
-    popup = Popup(title=title, content=box, size_hint=(0.9, 0.6))
+    popup = Popup(title=title, content=box, size_hint=(0.9, 0.7))
     close_btn.bind(on_release=popup.dismiss)
     popup.open()
 
