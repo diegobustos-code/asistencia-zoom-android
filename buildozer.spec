@@ -27,9 +27,12 @@ requirements = python3==3.11.6,hostpython3==3.11.6,kivy==2.2.1,openpyxl==3.1.5,p
 
 # --- Orientación e íconos ---
 # "portrait" bloqueaba la rotación por completo (el celular ignoraba el
-# sensor de giro). "all" permite que la app rote a horizontal cuando el
-# usuario gira el celular, y vuelva a vertical al girarlo de regreso.
-orientation = all
+# sensor de giro). Buildozer NO acepta el valor "all" (por eso falló la
+# última compilación: "[app] 'all' is not a valid value for
+# 'orientation'") — el valor correcto para permitir ambas orientaciones
+# es una lista separada por comas con los nombres exactos que Buildozer
+# reconoce: "portrait,landscape".
+orientation = portrait,landscape
 fullscreen = 0
 # Si más adelante quieres un ícono propio, descomenta y agrega el archivo:
 # icon.filename = %(source.dir)s/data/icon.png
