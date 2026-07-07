@@ -276,7 +276,21 @@ class ZoomAttendanceMobileApp(App):
         self.no_encontrados = []
         self.ambiguos = []
         self.mode = "zoom"
+        self._request_android_permissions()
         return Builder.load_string(KV)
+
+    def _request_android_permissions(self):
+        """Pide permisos de almacenamiento al usuario la primera vez que
+        abre la app en Android. En PC (Windows/Linux/Mac) no existe el
+        módulo 'android', así que simplemente no hace nada ahí."""
+        try:
+            from android.permissions import request_permissions, Permission
+            request_permissions([
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+            ])
+        except ImportError:
+            pass  # No estamos corriendo en Android, no hace falta.
 
     # ------------------------------------------------------------------
     # Selección de archivos (usa el selector nativo de Android/escritorio)
