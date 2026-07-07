@@ -18,16 +18,27 @@ Funciones:
 """
 
 import os
+import re
+import unicodedata
 
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.lang import Builder
+from kivy.metrics import dp
 from kivy.properties import BooleanProperty, ListProperty, StringProperty
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
 from kivy.uix.popup import Popup
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
+
+# Debe coincidir EXACTAMENTE con "title = ..." en buildozer.spec. Se usa
+# solo para poder mostrarle al usuario la ruta exacta donde quedan los
+# reportes (Android arma esa carpeta automáticamente usando el nombre de
+# la app tal cual aparece bajo el ícono, que es justamente ese "title").
+APP_TITLE_FOR_STORAGE = "Asistencia Zoom"
 
 from csv_processor import (
     CSVProcessingError,
@@ -47,29 +58,53 @@ DEFAULT_THRESHOLD = "30"
 
 KV = """
 <AppButton@Button>:
+    # button_color es una propiedad "inventada" (Kivy la crea sola al
+    # verla en una regla KV): así cada botón puede definir su propio
+    # color sin perder el estilo común (esquinas redondeadas, texto
+    # blanco, etc.) definido acá una sola vez.
+    button_color: 0.20, 0.45, 0.75, 1
     background_normal: ""
     background_down: ""
     background_disabled_normal: ""
-    background_color: 0.20, 0.45, 0.75, 1
+    background_color: 0, 0, 0, 0
     color: 1, 1, 1, 1
     bold: True
-    font_size: "15sp"
+    font_size: "13.5sp" if app.landscape else "15sp"
+    canvas.before:
+        Color:
+            rgba: (0.68, 0.70, 0.73, 1) if self.disabled else self.button_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(10)]
 
 <StyledInput@TextInput>:
     background_normal: ""
     background_active: ""
-    background_color: 1, 1, 1, 1
+    background_color: 0, 0, 0, 0
     foreground_color: 0.15, 0.15, 0.15, 1
-    hint_text_color: 0.55, 0.55, 0.55, 1
-    cursor_color: 0.15, 0.15, 0.15, 1
+    hint_text_color: 0.60, 0.60, 0.60, 1
+    cursor_color: 0.20, 0.45, 0.75, 1
     padding: dp(10), dp(10)
     font_size: "14sp"
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.80, 0.83, 0.87, 1
+        Line:
+            rounded_rectangle: [self.x, self.y, self.width, self.height, dp(8)]
+            width: 1
 
 <RowWidget>:
     orientation: "horizontal"
     size_hint_y: None
-    height: dp(48)
-    padding: dp(6), dp(2)
+    height: dp(46)
+    padding: dp(8), dp(2)
     spacing: dp(4)
     canvas.before:
         Color:
@@ -78,7 +113,7 @@ KV = """
             pos: self.pos
             size: self.size
         Color:
-            rgba: 0.86, 0.87, 0.89, 1
+            rgba: 0.88, 0.89, 0.91, 1
         Line:
             points: [self.x, self.y, self.x + self.width, self.y]
             width: 1
@@ -128,88 +163,145 @@ KV = """
         font_size: "14sp"
 
 BoxLayout:
+    id: root_box
     orientation: "vertical"
     padding: dp(10)
-    spacing: dp(8)
+    spacing: dp(7)
+    canvas.before:
+        Color:
+            rgba: 0.94, 0.95, 0.97, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    # ------------------------------------------------------------------
+    # Barra de controles (mes, botones, búsqueda, filtros, orden).
+    # Va dentro de un ScrollView con altura MÁXIMA limitada a una
+    # fracción de la pantalla: si en horizontal no alcanza el espacio
+    # para mostrar todo, esta barra se vuelve desplazable POR SEPARADO,
+    # en vez de "robarle" espacio a la tabla de resultados de abajo. Así
+    # la tabla siempre conserva una zona visible y deslizable, sea cual
+    # sea el tamaño u orientación de la pantalla.
+    # ------------------------------------------------------------------
+    ScrollView:
+        id: toolbar_scroll
+        size_hint_y: None
+        height: min(toolbar_box.height, root_box.height * (0.58 if app.landscape else 0.86))
+        do_scroll_x: False
+        bar_width: dp(4)
+        BoxLayout:
+            id: toolbar_box
+            orientation: "vertical"
+            size_hint_y: None
+            height: self.minimum_height
+            spacing: dp(7)
+
+            BoxLayout:
+                size_hint_y: None
+                height: dp(34)
+                spacing: dp(6)
+                canvas.before:
+                    Color:
+                        rgba: 0.87, 0.91, 0.97, 1
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(8)]
+                Label:
+                    text: "Mes: " + (app.attendance_month if app.attendance_month else "(sin definir)")
+                    color: 0.14, 0.22, 0.34, 1
+                    bold: True
+                    font_size: "13sp"
+                    text_size: self.size
+                    padding: dp(10), 0
+                    halign: "left"
+                    valign: "middle"
+                    shorten: True
+                AppButton:
+                    text: "Cambiar mes"
+                    size_hint_x: 0.34
+                    button_color: 0.30, 0.36, 0.46, 1
+                    on_release: app.ask_attendance_month()
+
+            BoxLayout:
+                size_hint_y: None
+                height: dp(40) if app.landscape else dp(48)
+                spacing: dp(6)
+                AppButton:
+                    text: "Abrir CSV Zoom"
+                    on_release: app.open_zoom_dialog()
+                AppButton:
+                    text: "Abrir Socios (Excel)"
+                    on_release: app.open_roster_dialog()
+                AppButton:
+                    text: "Cotejar"
+                    disabled: not (app.zoom_loaded and app.roster_loaded)
+                    button_color: 0.16, 0.62, 0.42, 1
+                    on_release: app.on_cotejar()
+
+            Label:
+                id: status_label
+                text: app.status_text
+                size_hint_y: None
+                height: dp(38) if app.landscape else dp(44)
+                text_size: self.width, None
+                halign: "left"
+                valign: "middle"
+                color: 0.18, 0.20, 0.24, 1
+                font_size: "12.5sp"
+
+            BoxLayout:
+                size_hint_y: None
+                height: dp(40) if app.landscape else dp(44)
+                spacing: dp(6)
+                StyledInput:
+                    id: search_input
+                    hint_text: "Buscar nombre / apellido / sede"
+                    multiline: False
+                    on_text_validate: app.apply_filters()
+                StyledInput:
+                    id: min_duration_input
+                    hint_text: "Min. min"
+                    multiline: False
+                    input_filter: "float"
+                    size_hint_x: 0.24
+                    on_text_validate: app.apply_filters()
+                StyledInput:
+                    id: threshold_input
+                    hint_text: "Umbral P"
+                    text: "30"
+                    multiline: False
+                    input_filter: "float"
+                    size_hint_x: 0.24
+                    on_text_validate: app.apply_filters()
+
+            BoxLayout:
+                size_hint_y: None
+                height: dp(40) if app.landscape else dp(44)
+                spacing: dp(6)
+                Spinner:
+                    id: sort_spinner
+                    text: "Duración (mayor a menor)"
+                    values: ["Duración (mayor a menor)", "Duración (menor a mayor)", "Nombre (A-Z)", "Apellido (A-Z)", "Sede (A-Z)", "Asistencia"]
+                    background_normal: ""
+                    background_color: 1, 1, 1, 1
+                    color: 0.15, 0.15, 0.15, 1
+                    on_text: app.apply_filters()
+                AppButton:
+                    text: "Aplicar filtro"
+                    size_hint_x: 0.4
+                    on_release: app.apply_filters()
 
     BoxLayout:
         size_hint_y: None
-        height: dp(48)
-        spacing: dp(6)
-        AppButton:
-            text: "Abrir CSV Zoom"
-            on_release: app.open_zoom_dialog()
-        AppButton:
-            text: "Abrir Socios (Excel)"
-            on_release: app.open_roster_dialog()
-        AppButton:
-            text: "Cotejar"
-            disabled: not (app.zoom_loaded and app.roster_loaded)
-            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.16, 0.62, 0.42, 1)
-            on_release: app.on_cotejar()
-
-    Label:
-        id: status_label
-        text: app.status_text
-        size_hint_y: None
-        height: dp(44)
-        text_size: self.width, None
-        halign: "left"
-        valign: "middle"
-        color: 0.18, 0.20, 0.24, 1
-        font_size: "13sp"
-
-    BoxLayout:
-        size_hint_y: None
-        height: dp(44)
-        spacing: dp(6)
-        StyledInput:
-            id: search_input
-            hint_text: "Buscar nombre / apellido / sede"
-            multiline: False
-            on_text_validate: app.apply_filters()
-        StyledInput:
-            id: min_duration_input
-            hint_text: "Min. min"
-            multiline: False
-            input_filter: "float"
-            size_hint_x: 0.24
-            on_text_validate: app.apply_filters()
-        StyledInput:
-            id: threshold_input
-            hint_text: "Umbral P"
-            text: "30"
-            multiline: False
-            input_filter: "float"
-            size_hint_x: 0.24
-            on_text_validate: app.apply_filters()
-
-    BoxLayout:
-        size_hint_y: None
-        height: dp(44)
-        spacing: dp(6)
-        Spinner:
-            id: sort_spinner
-            text: "Duración (mayor a menor)"
-            values: ["Duración (mayor a menor)", "Duración (menor a mayor)", "Nombre (A-Z)", "Apellido (A-Z)", "Sede (A-Z)", "Asistencia"]
-            background_normal: ""
-            background_color: 1, 1, 1, 1
-            color: 0.15, 0.15, 0.15, 1
-            on_text: app.apply_filters()
-        AppButton:
-            text: "Aplicar filtro"
-            size_hint_x: 0.4
-            on_release: app.apply_filters()
-
-    BoxLayout:
-        size_hint_y: None
-        height: dp(32)
+        height: dp(28) if app.landscape else dp(32)
         canvas.before:
             Color:
                 rgba: 0.14, 0.22, 0.34, 1
-            Rectangle:
+            RoundedRectangle:
                 pos: self.pos
                 size: self.size
+                radius: [dp(6), dp(6), 0, 0]
         Label:
             text: "Nombre"
             bold: True
@@ -252,7 +344,7 @@ BoxLayout:
             id: rv
             viewclass: "RowWidget"
             RecycleBoxLayout:
-                default_size: None, dp(48)
+                default_size: None, dp(46)
                 default_size_hint: 1, None
                 size_hint_y: None
                 height: self.minimum_height
@@ -262,28 +354,28 @@ BoxLayout:
         id: count_label
         text: app.count_text
         size_hint_y: None
-        height: dp(28)
+        height: dp(22) if app.landscape else dp(26)
         color: 0.18, 0.20, 0.24, 1
         font_size: "12sp"
 
     BoxLayout:
         size_hint_y: None
-        height: dp(50)
+        height: dp(42) if app.landscape else dp(50)
         spacing: dp(6)
         AppButton:
             text: "Exportar CSV"
             disabled: not app.has_results
-            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.12, 0.55, 0.60, 1)
+            button_color: 0.12, 0.55, 0.60, 1
             on_release: app.export_csv()
         AppButton:
             text: "Exportar Excel"
             disabled: not app.has_results
-            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.12, 0.55, 0.60, 1)
+            button_color: 0.12, 0.55, 0.60, 1
             on_release: app.export_excel()
         AppButton:
             text: "Pendientes"
             disabled: not app.has_pendientes
-            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.85, 0.55, 0.15, 1)
+            button_color: 0.85, 0.55, 0.15, 1
             on_release: app.export_pendientes()
 """
 
@@ -337,6 +429,14 @@ class ZoomAttendanceMobileApp(App):
     roster_loaded = BooleanProperty(False)
     has_results = BooleanProperty(False)
     has_pendientes = BooleanProperty(False)
+    # True cuando el celular está en horizontal. El KV la usa para
+    # achicar algunas alturas y así aprovechar mejor el poco alto
+    # disponible en horizontal (ver _on_window_resize más abajo).
+    landscape = BooleanProperty(False)
+    # Mes de la asistencia que se está procesando (ej. "Julio 2026").
+    # Es obligatorio: no queda un valor por defecto a propósito, así el
+    # popup de inicio SIEMPRE lo pide la primera vez.
+    attendance_month = StringProperty("")
 
     def build(self):
         self.zoom_records = []
@@ -348,7 +448,134 @@ class ZoomAttendanceMobileApp(App):
         self.mode = "zoom"
         self._request_android_permissions()
         Window.clearcolor = (0.94, 0.95, 0.97, 1)
-        return Builder.load_string(KV)
+
+        self.landscape = Window.width > Window.height
+        Window.bind(size=self._on_window_resize)
+
+        root = Builder.load_string(KV)
+        # Se pide el mes con un pequeño retraso para que el popup se
+        # abra DESPUÉS de que la ventana principal ya esté armada (si se
+        # abre en el mismo instante que build(), en algunos celulares el
+        # popup queda "debajo" y no se ve).
+        Clock.schedule_once(self._ask_attendance_month_blocking, 0.3)
+        return root
+
+    def _on_window_resize(self, _instance, size):
+        self.landscape = size[0] > size[1]
+
+    # ------------------------------------------------------------------
+    # Mes de la asistencia (obligatorio)
+    # ------------------------------------------------------------------
+    def ask_attendance_month(self):
+        """Reabre el popup para CAMBIAR el mes ya definido (botón
+        'Cambiar mes'). A diferencia del popup inicial, este sí se puede
+        cerrar tocando afuera, porque ya hay un valor válido guardado."""
+        self._open_month_popup(force=False)
+
+    def _ask_attendance_month_blocking(self, *_args):
+        """Popup OBLIGATORIO que se muestra al abrir la app. No se puede
+        cerrar tocando afuera ni con el botón "atrás" del celular sin
+        haber escrito un mes: si se cierra sin que quede un valor
+        guardado, se vuelve a abrir solo."""
+        self._open_month_popup(force=True)
+
+    def _open_month_popup(self, force):
+        box = BoxLayout(orientation="vertical", padding=dp(16), spacing=dp(10))
+
+        if force:
+            intro_text = (
+                "Antes de continuar, ingresa el MES de esta asistencia "
+                "(ejemplo: \"Julio 2026\").\n\n"
+                "Es obligatorio: se usa para nombrar los reportes "
+                "exportados y para ordenarlos en sus carpetas."
+            )
+            intro_height = dp(96)
+        else:
+            intro_text = "Ingresa el nuevo mes de la asistencia:"
+            intro_height = dp(34)
+
+        box.add_widget(Label(
+            text=intro_text,
+            size_hint_y=None,
+            height=intro_height,
+            color=(0.15, 0.15, 0.15, 1),
+            halign="left",
+            valign="middle",
+            text_size=(dp(280), None),
+        ))
+
+        month_input = TextInput(
+            text=self.attendance_month,
+            hint_text="Ej: Julio 2026",
+            multiline=False,
+            size_hint_y=None,
+            height=dp(44),
+        )
+        box.add_widget(month_input)
+
+        error_label = Label(
+            text="",
+            size_hint_y=None,
+            height=dp(22),
+            color=(0.75, 0.10, 0.10, 1),
+            font_size="12sp",
+        )
+        box.add_widget(error_label)
+
+        continue_btn = Button(text="Continuar", size_hint_y=None, height=dp(46))
+        box.add_widget(continue_btn)
+
+        popup = Popup(
+            title="Mes de la asistencia (obligatorio)" if force else "Cambiar mes",
+            content=box,
+            size_hint=(0.9, 0.55),
+            auto_dismiss=not force,
+        )
+
+        def _confirm(*_a):
+            value = month_input.text.strip()
+            if not value:
+                error_label.text = "Debes ingresar el mes para poder continuar."
+                return
+            self.attendance_month = value
+            popup.dismiss()
+
+        def _reopen_if_still_empty(*_a):
+            # Cubre el caso del botón "atrás" de Android: si de alguna
+            # forma el popup se cerró sin guardar un mes, se vuelve a
+            # abrir de inmediato.
+            if force and not self.attendance_month:
+                Clock.schedule_once(lambda dt: popup.open(), 0.05)
+
+        continue_btn.bind(on_release=_confirm)
+        month_input.bind(on_text_validate=_confirm)
+        if force:
+            popup.bind(on_dismiss=_reopen_if_still_empty)
+        popup.open()
+
+    def _month_ready(self):
+        """Verifica que ya se haya ingresado el mes antes de dejar
+        cotejar o exportar. Es un respaldo extra: en el uso normal el
+        popup obligatorio del inicio ya garantiza esto, pero si por
+        algún motivo attendance_month quedara vacío, esto lo vuelve a
+        pedir en vez de dejar avanzar."""
+        if not self.attendance_month.strip():
+            self.ask_attendance_month()
+            return False
+        return True
+
+    @staticmethod
+    def _slugify(text):
+        """Convierte el mes ingresado (ej. "Julio 2026") en un texto
+        seguro para usar como parte de un nombre de archivo (sin
+        tildes, espacios ni símbolos raros)."""
+        text = unicodedata.normalize("NFKD", text or "")
+        text = "".join(c for c in text if not unicodedata.combining(c))
+        text = re.sub(r"[^A-Za-z0-9]+", "_", text).strip("_")
+        return text or "sin_mes"
+
+    def _month_slug(self):
+        return self._slugify(self.attendance_month)
 
     def _request_android_permissions(self):
         """Pide permisos de almacenamiento al usuario la primera vez que
@@ -563,6 +790,8 @@ class ZoomAttendanceMobileApp(App):
     # Cotejo
     # ------------------------------------------------------------------
     def on_cotejar(self):
+        if not self._month_ready():
+            return
         if not self.zoom_records or not self.roster_records:
             _show_popup("Faltan archivos", "Debes cargar el CSV de Zoom y el listado de socios.")
             return
@@ -672,31 +901,33 @@ class ZoomAttendanceMobileApp(App):
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _share_file(self, filepath, title):
-        """Guarda una copia del archivo exportado en la carpeta PÚBLICA
-        'Download' del celular (visible con cualquier explorador de
-        archivos, sin depender de que el diálogo de compartir se abra
-        correctamente) y, además, intenta abrir el diálogo nativo de
-        Android para compartir directamente (WhatsApp, Drive, correo,
-        etc.).
+    def _share_file(self, filepath, title, subfolder):
+        """Guarda una copia del archivo exportado en:
+        Download/Asistencia Zoom/<subfolder>/
+        del celular (visible con cualquier explorador de archivos, sin
+        depender de que el diálogo de compartir se abra correctamente)
+        y, además, intenta abrir el diálogo nativo de Android para
+        compartir directamente (WhatsApp, Drive, correo, etc.).
+
+        `subfolder` es "Cotejados" (para los exportados de asistencia) o
+        "Por revisar" (para los pendientes de revisión).
 
         Por qué hace falta copiarlo a Download aparte de intentar
         compartir: desde Android 10 en adelante, la carpeta privada de
         la app (`user_data_dir`, algo como
         "/data/user/0/<paquete>/files") NO es visible para ningún
         explorador de archivos ni para otras apps — solo la puede leer
-        esta misma app. Si el diálogo de compartir no llega a abrirse
-        (como pasó recién), el archivo quedaba "guardado" pero
-        inalcanzable. Copiándolo también a la carpeta pública Download
-        (usando la API de almacenamiento compartido de Android, la
-        única forma permitida de escribir ahí desde Android 10+) el
-        archivo queda accesible sí o sí, se abra o no el diálogo de
-        compartir."""
+        esta misma app. Si el diálogo de compartir no llega a abrirse,
+        el archivo quedaba "guardado" pero inalcanzable. Copiándolo
+        también a la carpeta pública Download (usando la API de
+        almacenamiento compartido de Android, la única forma permitida
+        de escribir ahí desde Android 10+) el archivo queda accesible sí
+        o sí, se abra o no el diálogo de compartir."""
         from kivy.utils import platform
 
         saved_to_downloads = False
         if platform == "android":
-            saved_to_downloads = self._copy_to_public_downloads(filepath)
+            saved_to_downloads = self._copy_to_public_downloads(filepath, subfolder)
 
         shared_ok = False
         try:
@@ -709,14 +940,15 @@ class ZoomAttendanceMobileApp(App):
         if shared_ok:
             return
 
+        carpeta_publica = f"Download / {APP_TITLE_FOR_STORAGE} / {subfolder}"
         if saved_to_downloads:
             _show_popup(
                 "Archivo guardado",
-                "El archivo se guardó en la carpeta 'Download' de tu "
-                "celular, con el nombre:\n" + os.path.basename(filepath) +
+                "El archivo se guardó en:\n" + carpeta_publica +
+                "\ncon el nombre:\n" + os.path.basename(filepath) +
                 "\n\nNo se pudo abrir el diálogo para compartir "
                 "automáticamente, pero puedes encontrarlo con cualquier "
-                "explorador de archivos, dentro de la carpeta Download.",
+                "explorador de archivos en esa carpeta.",
             )
         else:
             _show_popup(
@@ -727,12 +959,12 @@ class ZoomAttendanceMobileApp(App):
                 "con un explorador de archivos.",
             )
 
-    def _copy_to_public_downloads(self, filepath):
+    def _copy_to_public_downloads(self, filepath, subfolder):
         """Copia `filepath` (que vive en la carpeta privada de la app) a
-        la carpeta pública 'Download' del celular, usando la API de
-        almacenamiento compartido de Android (MediaStore vía el paquete
-        androidstorage4kivy). Esta es la única forma soportada de
-        escribir en una carpeta pública desde Android 10 en adelante;
+        Download/Asistencia Zoom/<subfolder>/ del celular, usando la API
+        de almacenamiento compartido de Android (MediaStore vía el
+        paquete androidstorage4kivy). Esta es la única forma soportada
+        de escribir en una carpeta pública desde Android 10 en adelante;
         escribir ahí con un simple open()/os.path como si fuera una
         carpeta común ya no funciona en versiones modernas de Android.
         Devuelve True si la copia se hizo con éxito, False si algo
@@ -742,43 +974,55 @@ class ZoomAttendanceMobileApp(App):
             from androidstorage4kivy import SharedStorage
             from jnius import autoclass
             Environment = autoclass("android.os.Environment")
+            dest_relpath = f"{subfolder}/{os.path.basename(filepath)}"
             shared_file = SharedStorage().copy_to_shared(
-                filepath, collection=Environment.DIRECTORY_DOWNLOADS
+                filepath,
+                collection=Environment.DIRECTORY_DOWNLOADS,
+                filepath=dest_relpath,
             )
             return shared_file is not None
         except Exception:
             return False
 
     def export_csv(self):
+        if not self._month_ready():
+            return
         if not self.filtered_records:
             _show_popup("Sin datos", "No hay resultados filtrados para exportar.")
             return
-        filepath = os.path.join(self._export_dir(), "asistencia_filtrada.csv")
+        filename = f"asistencia_{self._month_slug()}.csv"
+        filepath = os.path.join(self._export_dir(), filename)
         try:
             export_records_to_csv(self.filtered_records, filepath)
         except Exception as e:
             _show_popup("Error al exportar", str(e))
             return
-        self._share_file(filepath, "Asistencia (CSV)")
+        self._share_file(filepath, "Asistencia (CSV)", subfolder="Cotejados")
 
     def export_excel(self):
+        if not self._month_ready():
+            return
         if not self.filtered_records:
             _show_popup("Sin datos", "No hay resultados filtrados para exportar.")
             return
-        filepath = os.path.join(self._export_dir(), "asistencia_filtrada.xlsx")
+        filename = f"asistencia_{self._month_slug()}.xlsx"
+        filepath = os.path.join(self._export_dir(), filename)
         try:
             export_to_excel(self.filtered_records, filepath)
         except Exception as e:
             _show_popup("Error al exportar", str(e))
             return
-        self._share_file(filepath, "Asistencia (Excel)")
+        self._share_file(filepath, "Asistencia (Excel)", subfolder="Cotejados")
 
     def export_pendientes(self):
+        if not self._month_ready():
+            return
         if not self.no_encontrados and not self.ambiguos:
             _show_popup("Sin pendientes", "No hay registros pendientes de revisión.")
             return
         import csv as csv_module
-        filepath = os.path.join(self._export_dir(), "pendientes_de_revision.csv")
+        filename = f"pendientes_{self._month_slug()}.csv"
+        filepath = os.path.join(self._export_dir(), filename)
         try:
             with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
                 writer = csv_module.DictWriter(
@@ -800,4 +1044,4 @@ class ZoomAttendanceMobileApp(App):
         except Exception as e:
             _show_popup("Error al exportar", str(e))
             return
-        self._share_file(filepath, "Pendientes de revisión")
+        self._share_file(filepath, "Pendientes de revisión", subfolder="Por revisar")

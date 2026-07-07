@@ -7,6 +7,9 @@ lógica exacta que la versión de escritorio (`csv_processor.py`,
 
 ## Qué hace la app
 
+- Al abrir la app, pide (de forma OBLIGATORIA, con un popup que no se
+  puede cerrar sin completarlo) el mes de la asistencia que se va a
+  procesar — se puede cambiar después con el botón "Cambiar mes".
 - Abrir el CSV de participantes de Zoom (detecta el formato automáticamente,
   incluso si viene disfrazado de Excel).
 - Abrir el listado oficial de socios (Excel).
@@ -15,6 +18,18 @@ lógica exacta que la versión de escritorio (`csv_processor.py`,
 - Buscar, filtrar por duración mínima, ajustar el umbral de "Presente",
   y ordenar.
 - Exportar a CSV o Excel y compartirlo (WhatsApp, correo, Drive, etc.).
+  Los archivos exportados quedan guardados SIEMPRE (se abra o no el
+  diálogo de compartir) dentro de:
+  ```
+  Download / Asistencia Zoom / Cotejados      ← Exportar CSV / Exportar Excel
+  Download / Asistencia Zoom / Por revisar    ← Pendientes
+  ```
+  y el nombre del archivo incluye el mes ingresado, por ejemplo
+  `asistencia_Julio_2026.xlsx`.
+- Interfaz adaptativa: funciona tanto en vertical como en horizontal;
+  si los controles de arriba no caben todos en horizontal, esa barra se
+  vuelve desplazable por separado, para que la tabla de resultados
+  siempre tenga espacio para deslizarse.
 - **Si algo falla al iniciar, la app muestra el error como texto en
   pantalla completa** en vez de cerrarse en silencio (ver sección final).
 
