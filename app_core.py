@@ -293,21 +293,143 @@ class ZoomAttendanceMobileApp(App):
             pass  # No estamos corriendo en Android, no hace falta.
 
     # ------------------------------------------------------------------
-    # Selección de archivos (usa el selector nativo de Android/escritorio)
+    # Selección de archivos
     # ------------------------------------------------------------------
+    # En Android usamos directamente el Intent nativo de selección de
+    # documentos y leemos el archivo con ContentResolver. Esto evita un
+    # bug conocido de la librería 'plyer', que en algunos fabricantes
+    # (MIUI/Xiaomi) y algunas carpetas (ej. "Documentos") no logra
+    # convertir el archivo elegido en una ruta utilizable: a veces lanza
+    # un error de formato de identificador ("msf:...") y otras veces
+    # simplemente devuelve None sin avisar nada. Haciendo la lectura
+    # nosotros mismos (que es como Android espera que se haga desde la
+    # introducción de "almacenamiento con alcance limitado") evitamos
+    # depender de esa conversión y funciona sin importar la carpeta o
+    # el fabricante del celular.
+    #
+    # En PC (Windows/Linux/Mac, para pruebas) seguimos usando plyer, que
+    # ahí sí funciona sin problemas.
+
+    _REQUEST_CODE_ZOOM = 9001
+    _REQUEST_CODE_ROSTER = 9002
+
     def open_zoom_dialog(self):
+        self._open_file_dialog(is_roster=False)
+
+    def open_roster_dialog(self):
+        self._open_file_dialog(is_roster=True)
+
+    def _open_file_dialog(self, is_roster):
+        from kivy.utils import platform
+        if platform == "android":
+            self._open_file_dialog_android(is_roster)
+        else:
+            self._open_file_dialog_desktop(is_roster)
+
+    def _open_file_dialog_desktop(self, is_roster):
         from plyer import filechooser
+        callback = self._on_roster_selected if is_roster else self._on_zoom_selected
         try:
-            filechooser.open_file(on_selection=self._on_zoom_selected)
+            filechooser.open_file(on_selection=callback)
         except Exception as e:
             _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}")
 
-    def open_roster_dialog(self):
-        from plyer import filechooser
+    def _open_file_dialog_android(self, is_roster):
         try:
-            filechooser.open_file(on_selection=self._on_roster_selected)
+            from jnius import autoclass
+            from android import activity
+
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Intent = autoclass('android.content.Intent')
+
+            intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+            intent.setType("*/*")
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+            request_code = (
+                self._REQUEST_CODE_ROSTER if is_roster else self._REQUEST_CODE_ZOOM
+            )
+            activity.bind(on_activity_result=self._on_android_activity_result)
+            PythonActivity.mActivity.startActivityForResult(intent, request_code)
         except Exception as e:
             _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}")
+
+    def _on_android_activity_result(self, request_code, result_code, intent):
+        RESULT_OK = -1
+        if request_code not in (self._REQUEST_CODE_ZOOM, self._REQUEST_CODE_ROSTER):
+            return  # No es nuestro selector (puede ser el de "compartir", etc.)
+        if result_code != RESULT_OK or intent is None:
+            return
+        uri = intent.getData()
+        if uri is None:
+            return
+        is_roster = request_code == self._REQUEST_CODE_ROSTER
+        Clock.schedule_once(lambda dt: self._handle_picked_uri(uri, is_roster))
+
+    def _handle_picked_uri(self, uri, is_roster):
+        try:
+            filepath = self._copy_content_uri_to_local_file(uri)
+        except Exception as e:
+            _show_popup(
+                "Error",
+                f"No se pudo leer el archivo elegido desde el celular:\n{e}",
+            )
+            return
+        if is_roster:
+            self._load_roster_file(filepath)
+        else:
+            self._load_zoom_file(filepath)
+
+    @staticmethod
+    def _copy_content_uri_to_local_file(uri):
+        """Copia el archivo señalado por un content:// URI de Android hacia
+        un archivo normal dentro del almacenamiento privado de la app, para
+        poder abrirlo con las funciones normales de Python (open, pandas,
+        openpyxl, etc.) igual que en la versión de escritorio."""
+        from jnius import autoclass
+
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        OpenableColumns = autoclass('android.provider.OpenableColumns')
+        resolver = PythonActivity.mActivity.getContentResolver()
+
+        # Intentar obtener el nombre original del archivo (para conservar
+        # la extensión .csv / .xlsx y que el resto del código la detecte
+        # correctamente).
+        display_name = "archivo_seleccionado"
+        cursor = resolver.query(uri, None, None, None, None)
+        if cursor is not None:
+            try:
+                if cursor.moveToFirst():
+                    idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if idx != -1:
+                        name = cursor.getString(idx)
+                        if name:
+                            display_name = name
+            finally:
+                cursor.close()
+
+        input_stream = resolver.openInputStream(uri)
+        if input_stream is None:
+            raise IOError("Android no permitió abrir el archivo elegido.")
+
+        app = App.get_running_app()
+        dest_dir = app.user_data_dir
+        dest_path = os.path.join(dest_dir, display_name)
+
+        chunk_size = 8192
+        java_buffer = bytearray(chunk_size)
+        try:
+            with open(dest_path, "wb") as out_file:
+                while True:
+                    n = input_stream.read(java_buffer, 0, chunk_size)
+                    if n == -1:
+                        break
+                    out_file.write(bytes(java_buffer[:n]))
+        finally:
+            input_stream.close()
+
+        return dest_path
 
     def _on_zoom_selected(self, selection):
         if not selection:
