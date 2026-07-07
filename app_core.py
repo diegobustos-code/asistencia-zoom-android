@@ -21,8 +21,9 @@ import os
 
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.properties import ListProperty, StringProperty
+from kivy.properties import BooleanProperty, ListProperty, StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.popup import Popup
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
@@ -45,11 +46,30 @@ from roster_matcher import (
 DEFAULT_THRESHOLD = "30"
 
 KV = """
+<AppButton@Button>:
+    background_normal: ""
+    background_down: ""
+    background_disabled_normal: ""
+    background_color: 0.20, 0.45, 0.75, 1
+    color: 1, 1, 1, 1
+    bold: True
+    font_size: "15sp"
+
+<StyledInput@TextInput>:
+    background_normal: ""
+    background_active: ""
+    background_color: 1, 1, 1, 1
+    foreground_color: 0.15, 0.15, 0.15, 1
+    hint_text_color: 0.55, 0.55, 0.55, 1
+    cursor_color: 0.15, 0.15, 0.15, 1
+    padding: dp(10), dp(10)
+    font_size: "14sp"
+
 <RowWidget>:
     orientation: "horizontal"
     size_hint_y: None
-    height: dp(46)
-    padding: dp(4)
+    height: dp(48)
+    padding: dp(6), dp(2)
     spacing: dp(4)
     canvas.before:
         Color:
@@ -57,171 +77,213 @@ KV = """
         Rectangle:
             pos: self.pos
             size: self.size
+        Color:
+            rgba: 0.86, 0.87, 0.89, 1
+        Line:
+            points: [self.x, self.y, self.x + self.width, self.y]
+            width: 1
     Label:
         text: root.nombre
-        color: 0, 0, 0, 1
+        color: 0.12, 0.12, 0.14, 1
         size_hint_x: 0.28
         text_size: self.size
         halign: "left"
         valign: "middle"
         shorten: True
+        font_size: "13sp"
     Label:
         text: root.apellido
-        color: 0, 0, 0, 1
+        color: 0.12, 0.12, 0.14, 1
         size_hint_x: 0.28
         text_size: self.size
         halign: "left"
         valign: "middle"
         shorten: True
+        font_size: "13sp"
     Label:
         text: root.sede
-        color: 0, 0, 0, 1
+        color: 0.12, 0.12, 0.14, 1
         size_hint_x: 0.22
         text_size: self.size
         halign: "left"
         valign: "middle"
         shorten: True
+        font_size: "13sp"
     Label:
         text: root.duracion
-        color: 0, 0, 0, 1
+        color: 0.12, 0.12, 0.14, 1
         size_hint_x: 0.12
         text_size: self.size
         halign: "right"
         valign: "middle"
+        font_size: "13sp"
     Label:
         text: root.asistencia
         bold: True
-        color: 0, 0, 0, 1
+        color: 0.12, 0.12, 0.14, 1
         size_hint_x: 0.10
         text_size: self.size
         halign: "center"
         valign: "middle"
+        font_size: "14sp"
 
 BoxLayout:
     orientation: "vertical"
-    padding: dp(8)
-    spacing: dp(6)
+    padding: dp(10)
+    spacing: dp(8)
 
     BoxLayout:
         size_hint_y: None
-        height: dp(44)
+        height: dp(48)
         spacing: dp(6)
-        Button:
+        AppButton:
             text: "Abrir CSV Zoom"
             on_release: app.open_zoom_dialog()
-        Button:
+        AppButton:
             text: "Abrir Socios (Excel)"
             on_release: app.open_roster_dialog()
-        Button:
+        AppButton:
             text: "Cotejar"
             disabled: not (app.zoom_loaded and app.roster_loaded)
+            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.16, 0.62, 0.42, 1)
             on_release: app.on_cotejar()
 
     Label:
         id: status_label
         text: app.status_text
         size_hint_y: None
-        height: dp(40)
+        height: dp(44)
         text_size: self.width, None
         halign: "left"
         valign: "middle"
-        color: 0.2, 0.2, 0.2, 1
+        color: 0.18, 0.20, 0.24, 1
+        font_size: "13sp"
 
     BoxLayout:
         size_hint_y: None
-        height: dp(40)
+        height: dp(44)
         spacing: dp(6)
-        TextInput:
+        StyledInput:
             id: search_input
             hint_text: "Buscar nombre / apellido / sede"
             multiline: False
             on_text_validate: app.apply_filters()
-        TextInput:
+        StyledInput:
             id: min_duration_input
             hint_text: "Min. min"
             multiline: False
             input_filter: "float"
-            size_hint_x: 0.22
+            size_hint_x: 0.24
             on_text_validate: app.apply_filters()
-        TextInput:
+        StyledInput:
             id: threshold_input
             hint_text: "Umbral P"
             text: "30"
             multiline: False
             input_filter: "float"
-            size_hint_x: 0.22
+            size_hint_x: 0.24
             on_text_validate: app.apply_filters()
 
     BoxLayout:
         size_hint_y: None
-        height: dp(40)
+        height: dp(44)
         spacing: dp(6)
         Spinner:
             id: sort_spinner
             text: "Duración (mayor a menor)"
             values: ["Duración (mayor a menor)", "Duración (menor a mayor)", "Nombre (A-Z)", "Apellido (A-Z)", "Sede (A-Z)", "Asistencia"]
+            background_normal: ""
+            background_color: 1, 1, 1, 1
+            color: 0.15, 0.15, 0.15, 1
             on_text: app.apply_filters()
-        Button:
+        AppButton:
             text: "Aplicar filtro"
-            size_hint_x: 0.35
+            size_hint_x: 0.4
             on_release: app.apply_filters()
 
     BoxLayout:
         size_hint_y: None
-        height: dp(28)
+        height: dp(32)
+        canvas.before:
+            Color:
+                rgba: 0.14, 0.22, 0.34, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
         Label:
             text: "Nombre"
             bold: True
+            color: 1, 1, 1, 1
             size_hint_x: 0.28
+            font_size: "13sp"
         Label:
             text: "Apellido"
             bold: True
+            color: 1, 1, 1, 1
             size_hint_x: 0.28
+            font_size: "13sp"
         Label:
             text: "Sede"
             bold: True
+            color: 1, 1, 1, 1
             size_hint_x: 0.22
+            font_size: "13sp"
         Label:
             text: "Min."
             bold: True
+            color: 1, 1, 1, 1
             size_hint_x: 0.12
+            font_size: "13sp"
         Label:
             text: "Asist."
             bold: True
+            color: 1, 1, 1, 1
             size_hint_x: 0.10
+            font_size: "13sp"
 
-    RecycleView:
-        id: rv
-        viewclass: "RowWidget"
-        RecycleBoxLayout:
-            default_size: None, dp(46)
-            default_size_hint: 1, None
-            size_hint_y: None
-            height: self.minimum_height
-            orientation: "vertical"
+    BoxLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        RecycleView:
+            id: rv
+            viewclass: "RowWidget"
+            RecycleBoxLayout:
+                default_size: None, dp(48)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
 
     Label:
         id: count_label
         text: app.count_text
         size_hint_y: None
         height: dp(28)
-        color: 0.2, 0.2, 0.2, 1
+        color: 0.18, 0.20, 0.24, 1
+        font_size: "12sp"
 
     BoxLayout:
         size_hint_y: None
-        height: dp(46)
+        height: dp(50)
         spacing: dp(6)
-        Button:
+        AppButton:
             text: "Exportar CSV"
             disabled: not app.has_results
+            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.12, 0.55, 0.60, 1)
             on_release: app.export_csv()
-        Button:
+        AppButton:
             text: "Exportar Excel"
             disabled: not app.has_results
+            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.12, 0.55, 0.60, 1)
             on_release: app.export_excel()
-        Button:
+        AppButton:
             text: "Pendientes"
             disabled: not app.has_pendientes
+            background_color: (0.62, 0.65, 0.68, 1) if self.disabled else (0.85, 0.55, 0.15, 1)
             on_release: app.export_pendientes()
 """
 
@@ -263,10 +325,18 @@ def _show_popup(title: str, message: str) -> None:
 class ZoomAttendanceMobileApp(App):
     status_text = StringProperty("Ningún archivo cargado todavía.")
     count_text = StringProperty("Total: 0 | Filtrados: 0")
-    zoom_loaded = False
-    roster_loaded = False
-    has_results = False
-    has_pendientes = False
+    # IMPORTANTE: estas 4 banderas deben ser BooleanProperty (no atributos
+    # planos de Python) para que las reglas del KV como
+    # "disabled: not (app.zoom_loaded and app.roster_loaded)" se vuelvan a
+    # evaluar automáticamente cuando cambian. Con un atributo plano
+    # (zoom_loaded = False), Kivy nunca se entera de que cambió y el botón
+    # "Cotejar" (y los de "Exportar CSV/Excel/Pendientes") quedan
+    # deshabilitados para siempre, aunque la carga interna sí haya
+    # funcionado. Este era el bug que impedía cotejar y exportar.
+    zoom_loaded = BooleanProperty(False)
+    roster_loaded = BooleanProperty(False)
+    has_results = BooleanProperty(False)
+    has_pendientes = BooleanProperty(False)
 
     def build(self):
         self.zoom_records = []
@@ -277,6 +347,7 @@ class ZoomAttendanceMobileApp(App):
         self.ambiguos = []
         self.mode = "zoom"
         self._request_android_permissions()
+        Window.clearcolor = (0.94, 0.95, 0.97, 1)
         return Builder.load_string(KV)
 
     def _request_android_permissions(self):

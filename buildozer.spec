@@ -26,7 +26,10 @@ version = 1.0
 requirements = python3==3.11.6,hostpython3==3.11.6,kivy==2.2.1,openpyxl==3.1.5,plyer==2.1.0,et_xmlfile
 
 # --- Orientación e íconos ---
-orientation = portrait
+# "portrait" bloqueaba la rotación por completo (el celular ignoraba el
+# sensor de giro). "all" permite que la app rote a horizontal cuando el
+# usuario gira el celular, y vuelva a vertical al girarlo de regreso.
+orientation = all
 fullscreen = 0
 # Si más adelante quieres un ícono propio, descomenta y agrega el archivo:
 # icon.filename = %(source.dir)s/data/icon.png
