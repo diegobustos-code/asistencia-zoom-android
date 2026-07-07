@@ -34,7 +34,7 @@ fullscreen = 0
 # --- Permisos de Android ---
 # El selector de archivos moderno (Storage Access Framework) y el diálogo
 # de compartir no requieren permisos de almacenamiento en Android 10+.
-android.permissions = INTERNET
+android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,READ_MEDIA_IMAGES
 
 # --- Configuración de compilación de Android ---
 android.api = 33
