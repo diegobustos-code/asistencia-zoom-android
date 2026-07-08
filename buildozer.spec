@@ -42,8 +42,14 @@ requirements = python3==3.11.6,hostpython3==3.11.6,kivy==2.2.1,openpyxl==3.1.5,p
 # reconoce: "portrait,landscape".
 orientation = portrait,landscape
 fullscreen = 0
-# Si más adelante quieres un ícono propio, descomenta y agrega el archivo:
-# icon.filename = %(source.dir)s/data/icon.png
+# Ícono del launcher (escritorio/cajón de apps) y pantalla de carga al
+# abrir la app. Ambos archivos van en data/icon.png y data/presplash.png
+# dentro del repo (junto a buildozer.spec).
+icon.filename = %(source.dir)s/data/icon.png
+presplash.filename = %(source.dir)s/data/presplash.png
+# Color de fondo de la pantalla de carga, para que combine con el borde
+# claro del logo en vez de mostrar el negro por defecto de Kivy.
+presplash.color = #E5EAEE
 
 # --- Permisos de Android ---
 # El selector de archivos moderno (Storage Access Framework) y el diálogo
