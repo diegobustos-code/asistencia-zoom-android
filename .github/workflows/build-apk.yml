@@ -39,23 +39,27 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.01.21
 
-      - name: Guardar en caché el SDK/NDK de Android
-        uses: actions/cache@v4
-        with:
-          path: |
-            .buildozer
-            ~/.buildozer
-          key: buildozer-cache-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            buildozer-cache-${{ runner.os }}-
+      - name: Configurar buildozer.spec para usar Android SDK del sistema
+        run: |
+          # Obtener la ruta del Android SDK
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          
+          # Crear directorio de caché de buildozer
+          mkdir -p ~/.buildozer/android/platform
+          
+          # Crear un symlink del SDK que buildozer espera
+          ln -sf /usr/local/lib/android/sdk ~/.buildozer/android/platform/android-sdk || true
 
       - name: Compilar el APK con Buildozer
         run: |
           set -o pipefail
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          export ANDROID_HOME=/usr/local/lib/android/sdk
           python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
         env:
-          ANDROID_SDK_ROOT: ${{ steps.android.outputs.android-sdk-root }}
-          ANDROID_HOME: ${{ steps.android.outputs.android-sdk-root }}
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+          ANDROID_HOME: /usr/local/lib/android/sdk
 
       - name: Publicar el APK y el log completo como archivos descargables
         if: always()
