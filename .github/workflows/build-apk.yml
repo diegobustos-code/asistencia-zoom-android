@@ -17,51 +17,28 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Configurar Java 11
+      - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'
-
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 33
-          build-tools-version: 35.0.0
+          java-version: '17'
 
       - name: Instalar dependencias del sistema
         run: |
           sudo apt-get update
           sudo apt-get install -y git zip unzip autoconf libtool pkg-config zlib1g-dev cmake libffi-dev libssl-dev automake build-essential libltdl-dev
 
-      - name: Instalar Buildozer y dependencias Python
+      - name: Instalar Buildozer y python-for-android
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.01.21
-
-      - name: Configurar buildozer.spec para usar Android SDK del sistema
-        run: |
-          # Obtener la ruta del Android SDK
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          
-          # Crear directorio de caché de buildozer
-          mkdir -p ~/.buildozer/android/platform
-          
-          # Crear un symlink del SDK que buildozer espera
-          ln -sf /usr/local/lib/android/sdk ~/.buildozer/android/platform/android-sdk || true
+          python -m pip install --upgrade pip setuptools
+          pip install buildozer==1.5.0 cython==0.29.33 python-for-android==2024.01.21
 
       - name: Compilar el APK con Buildozer
         run: |
           set -o pipefail
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          export ANDROID_HOME=/usr/local/lib/android/sdk
           python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-          ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: Publicar el APK y el log completo como archivos descargables
+      - name: Publicar el APK y el log como archivos descargables
         if: always()
         uses: actions/upload-artifact@v4
         with:
