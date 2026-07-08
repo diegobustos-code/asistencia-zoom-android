@@ -24,6 +24,7 @@ import unicodedata
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.graphics import Color, Rectangle
 from kivy.lang import Builder
 from kivy.metrics import dp
 from kivy.properties import BooleanProperty, ListProperty, StringProperty
@@ -414,8 +415,57 @@ class RowWidget(RecycleDataViewBehavior, BoxLayout):
         return super().refresh_view_attrs(rv, index, data)
 
 
-def _show_popup(title: str, message: str) -> None:
+def _add_white_background(widget, color=(1, 1, 1, 1)):
+    """Dibuja un fondo opaco detrás de `widget`. Los Popup de Kivy usan
+    por defecto un fondo semi-transparente oscuro, así que un Label con
+    texto oscuro (como los que usa esta app) queda prácticamente
+    invisible encima — eso era lo que pasaba en el popup "Archivo
+    guardado". Este helper agrega un rectángulo blanco que sigue la
+    posición y el tamaño del widget en todo momento."""
+    with widget.canvas.before:
+        Color(*color)
+        rect = Rectangle(pos=widget.pos, size=widget.size)
+
+    def _sync_rect(instance, _value):
+        rect.pos = instance.pos
+        rect.size = instance.size
+
+    widget.bind(pos=_sync_rect, size=_sync_rect)
+
+
+def _open_shared_uri(uri_str, mime_type):
+    """Abre un archivo ya copiado a la carpeta pública de Descargas
+    usando el visor/app que Android tenga asociada a ese tipo de
+    archivo (por ejemplo, Google Sheets o Excel para un .xlsx, o
+    cualquier lector de CSV). `uri_str` es el content:// que devuelve
+    androidstorage4kivy al copiar el archivo. Solo funciona en Android;
+    en PC no hace nada (ahí el usuario ya tiene el archivo a mano en su
+    carpeta de exportación local)."""
+    from kivy.utils import platform
+    if platform != "android" or not uri_str:
+        return
+    try:
+        from jnius import autoclass, cast
+        Intent = autoclass("android.content.Intent")
+        Uri = autoclass("android.net.Uri")
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        intent = Intent(Intent.ACTION_VIEW)
+        intent.setDataAndType(Uri.parse(uri_str), mime_type)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        activity = cast("android.app.Activity", PythonActivity.mActivity)
+        activity.startActivity(intent)
+    except Exception as e:
+        _show_popup(
+            "No se pudo abrir",
+            "El archivo está guardado correctamente, pero no se encontró "
+            "una app instalada para abrirlo directamente.\n\n"
+            f"Detalle técnico: {e}",
+        )
+
+
+def _show_popup(title: str, message: str, open_uri: str = None, open_mime: str = None) -> None:
     box = BoxLayout(orientation="vertical", padding=dp(14), spacing=dp(10))
+    _add_white_background(box)
 
     scroll = ScrollView(do_scroll_x=False)
     msg_label = Label(
@@ -444,7 +494,27 @@ def _show_popup(title: str, message: str) -> None:
     scroll.add_widget(msg_label)
     box.add_widget(scroll)
 
-    close_btn = Button(text="Cerrar", size_hint_y=None, height=dp(44))
+    if open_uri:
+        open_btn = Button(
+            text="Abrir archivo",
+            size_hint_y=None,
+            height=dp(46),
+            background_normal="",
+            background_color=(0.12, 0.55, 0.60, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        open_btn.bind(on_release=lambda *_a: _open_shared_uri(open_uri, open_mime))
+        box.add_widget(open_btn)
+
+    close_btn = Button(
+        text="Cerrar",
+        size_hint_y=None,
+        height=dp(44),
+        background_normal="",
+        background_color=(0.55, 0.58, 0.61, 1),
+        color=(1, 1, 1, 1),
+    )
     box.add_widget(close_btn)
     popup = Popup(title=title, content=box, size_hint=(0.9, 0.7))
     close_btn.bind(on_release=popup.dismiss)
@@ -518,6 +588,7 @@ class ZoomAttendanceMobileApp(App):
 
     def _open_month_popup(self, force):
         box = BoxLayout(orientation="vertical", padding=dp(16), spacing=dp(10))
+        _add_white_background(box)
 
         if force:
             intro_text = (
@@ -962,9 +1033,16 @@ class ZoomAttendanceMobileApp(App):
         o sí, se abra o no el diálogo de compartir."""
         from kivy.utils import platform
 
-        saved_to_downloads = False
+        extension = os.path.splitext(filepath)[1].lower()
+        mime_type = {
+            ".csv": "text/csv",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }.get(extension, "*/*")
+
+        shared_uri = None
         if platform == "android":
-            saved_to_downloads = self._copy_to_public_downloads(filepath, subfolder)
+            shared_uri = self._copy_to_public_downloads(filepath, subfolder)
+        saved_to_downloads = shared_uri is not None
 
         shared_ok = False
         try:
@@ -980,12 +1058,11 @@ class ZoomAttendanceMobileApp(App):
         carpeta_publica = f"Download / {APP_TITLE_FOR_STORAGE} / {subfolder}"
         if saved_to_downloads:
             _show_popup(
-                "Archivo guardado",
-                "El archivo se guardó en:\n" + carpeta_publica +
-                "\ncon el nombre:\n" + os.path.basename(filepath) +
-                "\n\nNo se pudo abrir el diálogo para compartir "
-                "automáticamente, pero puedes encontrarlo con cualquier "
-                "explorador de archivos en esa carpeta.",
+                "Archivo guardado correctamente ✓",
+                "Se guardó en:\n" + carpeta_publica +
+                "\n\ncon el nombre:\n" + os.path.basename(filepath),
+                open_uri=shared_uri,
+                open_mime=mime_type,
             )
         else:
             _show_popup(
@@ -1004,7 +1081,8 @@ class ZoomAttendanceMobileApp(App):
         de escribir en una carpeta pública desde Android 10 en adelante;
         escribir ahí con un simple open()/os.path como si fuera una
         carpeta común ya no funciona en versiones modernas de Android.
-        Devuelve True si la copia se hizo con éxito, False si algo
+        Devuelve el content:// URI del archivo copiado (que sirve para
+        poder abrirlo después con "Abrir archivo"), o None si algo
         falló (por ejemplo, en un celular muy viejo o si el paquete no
         se pudo cargar)."""
         try:
@@ -1017,9 +1095,9 @@ class ZoomAttendanceMobileApp(App):
                 collection=Environment.DIRECTORY_DOWNLOADS,
                 filepath=dest_relpath,
             )
-            return shared_file is not None
+            return shared_file
         except Exception:
-            return False
+            return None
 
     def export_csv(self):
         if not self._month_ready():
