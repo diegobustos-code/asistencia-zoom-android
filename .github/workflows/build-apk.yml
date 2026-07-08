@@ -44,7 +44,7 @@ jobs:
       - name: Compilar el APK con Buildozer
         run: |
           set -o pipefail
-          python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
+          yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
       - name: Publicar el APK y el log completo como archivos descargables
         if: always()
