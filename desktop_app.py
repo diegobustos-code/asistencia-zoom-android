@@ -224,12 +224,12 @@ class ZoomAttendanceDesktopApp(tk.Tk):
         # colores de fondo en botones/Treeview de forma confiable en Windows.
         style.theme_use("clam")
 
-        style.configure("Treeview", rowheight=26, font=("Segoe UI", 9.5),
+        style.configure("Treeview", rowheight=26, font=("Segoe UI", 10),
                          background="white", fieldbackground="white")
         style.configure(
             "Treeview.Heading",
             background=COLOR_TABLE_HEADER_BG, foreground="white",
-            font=("Segoe UI", 9.5, "bold"), relief="flat",
+            font=("Segoe UI", 10, "bold"), relief="flat",
         )
         style.map("Treeview.Heading", background=[("active", COLOR_TABLE_HEADER_BG)])
 
@@ -311,7 +311,7 @@ class ZoomAttendanceDesktopApp(tk.Tk):
         self.status_var = tk.StringVar(value="Ningún archivo cargado todavía.")
         tk.Label(
             main, textvariable=self.status_var, bg=COLOR_BG, fg="#2E3440",
-            justify="left", anchor="w", font=("Segoe UI", 9.5), wraplength=1000,
+            justify="left", anchor="w", font=("Segoe UI", 10), wraplength=1000,
         ).pack(fill=tk.X, pady=(0, 8))
 
         # --- Filtros: búsqueda, duración mínima, umbral ---
