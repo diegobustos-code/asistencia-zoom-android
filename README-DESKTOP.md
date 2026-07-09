@@ -54,9 +54,22 @@ y coloca `build-exe.yml` dentro de `.github/workflows/`, junto a
    Windows"** → **"Run workflow"**.
 3. Espera a que termine en verde (unos 3-5 minutos, mucho más rápido
    que el APK porque no hay que compilar ningún NDK).
-4. Baja a **"Artifacts"** y descarga `AsistenciaZoom-EXE` — ahí adentro
-   está `AsistenciaZoom.exe`, listo para copiar a cualquier PC con
-   Windows y ejecutar con doble clic (no necesita instalar Python).
+4. Baja a **"Artifacts"** y descarga `AsistenciaZoom-EXE` — se
+   descarga como un .zip. Descomprímelo: adentro va a haber una carpeta
+   llamada `AsistenciaZoom` con el `AsistenciaZoom.exe` y varios
+   archivos más (sus dependencias). Hay que copiar **la carpeta
+   completa** (no solo el .exe suelto) a cualquier PC con Windows —
+   el programa no va a abrir si separas el .exe del resto de los
+   archivos de la carpeta. Una vez copiada la carpeta, se ejecuta
+   haciendo doble clic en `AsistenciaZoom.exe` de adentro (no necesita
+   instalar Python).
+
+   > Nota: antes el resultado era un solo archivo `.exe` (modo
+   > `--onefile` de PyInstaller). Se cambió a este formato de carpeta
+   > (`--onedir`) porque el modo de un solo archivo genera muchos más
+   > falsos positivos de antivirus, ya que se autoextrae en una carpeta
+   > temporal al abrirse — un comportamiento típico de malware. En este
+   > formato de carpeta, ese paso de autoextracción no existe.
 
 ## Cómo probarlo en tu propia PC sin compilar nada (opcional)
 
