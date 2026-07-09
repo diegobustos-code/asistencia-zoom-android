@@ -475,9 +475,18 @@ def _open_shared_uri(uri_str, mime_type):
         from jnius import autoclass, cast
         Intent = autoclass("android.content.Intent")
         Uri = autoclass("android.net.Uri")
+        JavaString = autoclass("java.lang.String")
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
         activity = cast("android.app.Activity", PythonActivity.mActivity)
         uri = Uri.parse(str(uri_str))
+        # "Abrir con" tiene que llegar como un java.lang.String de
+        # verdad (no un texto de Python) para que jnius pueda decidir
+        # cuál de las dos versiones sobrecargadas de
+        # Intent.createChooser(...) usar. Pasándole el texto de Python
+        # tal cual, jnius no lograba resolver la firma exacta y tiraba
+        # "No static methods called createChooser ... matching your
+        # arguments" — el error de tu pantallazo.
+        chooser_title = JavaString("Abrir con")
 
         def _try_open(mime):
             intent = Intent(Intent.ACTION_VIEW)
@@ -489,7 +498,7 @@ def _open_shared_uri(uri_str, mime_type):
             # antes — que es justo lo que se pidió: poder elegir la app
             # (Excel, OpenOffice, etc.) cada vez, tanto para .xlsx como
             # para .csv.
-            chooser = Intent.createChooser(intent, "Abrir con")
+            chooser = Intent.createChooser(intent, chooser_title)
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             activity.startActivity(chooser)
 
