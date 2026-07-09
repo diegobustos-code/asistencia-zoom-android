@@ -7,7 +7,12 @@ package.domain = org.sindicato
 
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
-version = 1.0
+# Este es el número de versión que ves en pantalla / en la info de la
+# app instalada. Súbelo cada vez que compiles una versión nueva para
+# poder distinguirlas (ej. 1.14, 1.15, ...). Esto por sí solo NO
+# soluciona el error al actualizar sobre una instalación anterior — ver
+# la nota sobre la "firma" (keystore) más abajo y en build-apk.yml.
+version = 1.14
 
 # --- Dependencias que necesita la app dentro del APK ---
 # NOTA: se fijan explícitamente TANTO "python3" (la versión que se

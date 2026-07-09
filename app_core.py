@@ -27,7 +27,7 @@ from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 from kivy.lang import Builder
 from kivy.metrics import dp
-from kivy.properties import BooleanProperty, ListProperty, StringProperty
+from kivy.properties import BooleanProperty, ListProperty, NumericProperty, StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.popup import Popup
@@ -191,7 +191,16 @@ BoxLayout:
     ScrollView:
         id: toolbar_scroll
         size_hint_y: None
-        height: min(toolbar_box.height, root_box.height * (0.58 if app.landscape else 0.86))
+        # ANTES: "root_box.height * 0.58" en horizontal le reservaba a la
+        # barra de controles más de la mitad del alto de la pantalla, que
+        # en horizontal ya es poco (el celular está "acostado"). Eso
+        # dejaba a la tabla de resultados con apenas un puñado de pixeles
+        # de alto —por eso solo se veía "fila por fila" y no había
+        # margen real para deslizar. Ahora el máximo lo calcula
+        # "app.toolbar_max_height" en Python (ver _recalc_toolbar_max),
+        # que SIEMPRE le deja a la tabla una altura mínima garantizada,
+        # sea cual sea la orientación o el tamaño de pantalla.
+        height: min(toolbar_box.height, app.toolbar_max_height)
         do_scroll_x: False
         bar_width: dp(4)
         BoxLayout:
@@ -355,6 +364,12 @@ BoxLayout:
         RecycleView:
             id: rv
             viewclass: "RowWidget"
+            # Barra de scroll visible: además de arreglar el alto
+            # disponible, esto le da al usuario una señal clara de que
+            # la lista se puede deslizar (antes no había ninguna pista
+            # visual y encima casi no había alto para hacerlo).
+            bar_width: dp(6)
+            scroll_type: ["bars", "content"]
             RecycleBoxLayout:
                 default_size: None, dp(46)
                 default_size_hint: 1, None
@@ -434,13 +449,25 @@ def _add_white_background(widget, color=(1, 1, 1, 1)):
 
 
 def _open_shared_uri(uri_str, mime_type):
-    """Abre un archivo ya copiado a la carpeta pública de Descargas
-    usando el visor/app que Android tenga asociada a ese tipo de
-    archivo (por ejemplo, Google Sheets o Excel para un .xlsx, o
-    cualquier lector de CSV). `uri_str` es el content:// que devuelve
-    androidstorage4kivy al copiar el archivo. Solo funciona en Android;
-    en PC no hace nada (ahí el usuario ya tiene el archivo a mano en su
-    carpeta de exportación local)."""
+    """Abre un archivo ya copiado a la carpeta pública de Descargas,
+    mostrando SIEMPRE el selector nativo de Android ("Abrir con...")
+    para que el usuario elija con qué app abrirlo (Excel, Google
+    Sheets, WPS Office, OpenOffice, cualquier lector de CSV, etc.), en
+    vez de intentar adivinar una sola app por defecto.
+
+    `uri_str` es el identificador que devuelve androidstorage4kivy al
+    copiar el archivo a la carpeta compartida. Solo funciona en
+    Android; en PC no hace nada (ahí el usuario ya tiene el archivo a
+    mano en su carpeta de exportación local).
+
+    NOTA sobre el bug anterior ("Invalid instance of 'android/net/Uri'
+    passed for a 'java/lang/String'"): androidstorage4kivy en realidad
+    devuelve un objeto Uri de Android, no un texto plano. El código
+    viejo guardaba ese objeto tal cual y, más tarde, volvía a llamar
+    `Uri.parse(...)` sobre él —pero `Uri.parse` espera un String, no un
+    Uri ya armado, y ahí reventaba. Ahora `_copy_to_public_downloads`
+    lo convierte a texto (str) apenas lo recibe, así que acá siempre
+    llega un String normal y `Uri.parse` funciona sin problema."""
     from kivy.utils import platform
     if platform != "android" or not uri_str:
         return
@@ -449,23 +476,67 @@ def _open_shared_uri(uri_str, mime_type):
         Intent = autoclass("android.content.Intent")
         Uri = autoclass("android.net.Uri")
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        intent = Intent(Intent.ACTION_VIEW)
-        intent.setDataAndType(Uri.parse(uri_str), mime_type)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION)
         activity = cast("android.app.Activity", PythonActivity.mActivity)
-        activity.startActivity(intent)
+        uri = Uri.parse(str(uri_str))
+
+        def _try_open(mime):
+            intent = Intent(Intent.ACTION_VIEW)
+            intent.setDataAndType(uri, mime)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            # Intent.createChooser fuerza SIEMPRE el pop-up "Abrir con"
+            # con todas las apps que puedan abrir ese tipo de archivo,
+            # aunque el usuario ya haya marcado alguna como "Siempre"
+            # antes — que es justo lo que se pidió: poder elegir la app
+            # (Excel, OpenOffice, etc.) cada vez, tanto para .xlsx como
+            # para .csv.
+            chooser = Intent.createChooser(intent, "Abrir con")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(chooser)
+
+        try:
+            _try_open(mime_type)
+        except Exception:
+            # Algunos celulares no tienen ninguna app registrada para el
+            # tipo MIME exacto (ej. "text/csv"); se reintenta con un
+            # tipo genérico para que de todas formas aparezca el
+            # selector con las apps de archivos/documentos disponibles.
+            _try_open("*/*")
     except Exception as e:
         _show_popup(
             "No se pudo abrir",
-            "El archivo está guardado correctamente, pero no se encontró "
-            "una app instalada para abrirlo directamente.\n\n"
+            "El archivo está guardado correctamente, pero no se pudo "
+            "mostrar el selector de apps para abrirlo.\n\n"
             f"Detalle técnico: {e}",
+            success=False,
         )
 
 
-def _show_popup(title: str, message: str, open_uri: str = None, open_mime: str = None) -> None:
+def _show_popup(
+    title: str,
+    message: str,
+    open_uri: str = None,
+    open_mime: str = None,
+    success: bool = None,
+) -> None:
+    """Muestra un popup de mensaje. Si `success` es True o False, se
+    agrega arriba un ✓ verde o una ✕ roja bien grandes para que de un
+    vistazo (sin tener que leer el texto) se note si la operación salió
+    bien o mal. Si `success` es None (el valor por defecto), no se
+    muestra ningún ícono — para mensajes que son solo informativos, ni
+    éxito ni error (ej. "Debes cargar ambos archivos")."""
     box = BoxLayout(orientation="vertical", padding=dp(14), spacing=dp(10))
     _add_white_background(box)
+
+    if success is not None:
+        icon_label = Label(
+            text="\u2713" if success else "\u2715",  # ✓ / ✕
+            bold=True,
+            font_size="40sp",
+            size_hint_y=None,
+            height=dp(48),
+            color=(0.16, 0.62, 0.42, 1) if success else (0.82, 0.22, 0.22, 1),
+        )
+        box.add_widget(icon_label)
 
     scroll = ScrollView(do_scroll_x=False)
     msg_label = Label(
@@ -540,6 +611,14 @@ class ZoomAttendanceMobileApp(App):
     # achicar algunas alturas y así aprovechar mejor el poco alto
     # disponible en horizontal (ver _on_window_resize más abajo).
     landscape = BooleanProperty(False)
+    # Alto máximo (en px) que puede ocupar la barra de controles de
+    # arriba (mes/botones/buscador/filtros) antes de volverse
+    # desplazable por separado. Se recalcula en _recalc_toolbar_max()
+    # cada vez que cambia el tamaño de la ventana, y SIEMPRE deja un
+    # mínimo garantizado de alto libre para la tabla de resultados (ver
+    # LIST_MIN_HEIGHT), que es justo lo que en horizontal no estaba
+    # pasando antes.
+    toolbar_max_height = NumericProperty(dp(400))
     # Mes de la asistencia que se está procesando (ej. "Julio 2026").
     # Es obligatorio: no queda un valor por defecto a propósito, así el
     # popup de inicio SIEMPRE lo pide la primera vez.
@@ -560,6 +639,13 @@ class ZoomAttendanceMobileApp(App):
         Window.bind(size=self._on_window_resize)
 
         root = Builder.load_string(KV)
+        # El alto de root_box todavía no es el definitivo apenas se
+        # construye el KV (Kivy recién va a hacer el layout), así que
+        # además de recalcular en cada resize, lo recalculamos una vez
+        # más un instante después de arrancar, cuando el layout real ya
+        # está listo.
+        root.bind(height=self._recalc_toolbar_max)
+        Clock.schedule_once(self._recalc_toolbar_max, 0)
         # Se pide el mes con un pequeño retraso para que el popup se
         # abra DESPUÉS de que la ventana principal ya esté armada (si se
         # abre en el mismo instante que build(), en algunos celulares el
@@ -569,6 +655,34 @@ class ZoomAttendanceMobileApp(App):
 
     def _on_window_resize(self, _instance, size):
         self.landscape = size[0] > size[1]
+        Clock.schedule_once(self._recalc_toolbar_max, 0)
+
+    # Alto mínimo que la tabla de resultados debe conservar siempre,
+    # sin importar cuánto ocupe la barra de controles de arriba.
+    LIST_MIN_HEIGHT = dp(170)
+
+    def _recalc_toolbar_max(self, *_args):
+        """Calcula cuánto espacio le queda disponible a la barra de
+        controles (mes/botones/buscador/filtros) DESPUÉS de reservar el
+        alto de las filas fijas de abajo (encabezado, contador, botones
+        de exportar) y un mínimo garantizado para la tabla de
+        resultados. Este es el arreglo al problema de horizontal: antes
+        se le daba a la barra de controles una fracción fija del alto
+        total (0.58 en horizontal), que en pantallas anchas y bajas
+        dejaba casi nada para la tabla. Ahora la tabla SIEMPRE se queda
+        con su mínimo, y la barra de controles usa lo que sobra (y si no
+        alcanza para mostrarse completa, ella misma se vuelve
+        desplazable, gracias al ScrollView que la contiene)."""
+        if not self.root:
+            return
+        header_h = dp(28) if self.landscape else dp(32)
+        count_h = dp(22) if self.landscape else dp(26)
+        export_h = dp(42) if self.landscape else dp(50)
+        gaps = 4 * dp(7)   # 4 espacios entre los 5 hijos directos de root_box
+        padding = 2 * dp(10)  # padding superior + inferior de root_box
+        reserved = header_h + count_h + export_h + gaps + padding
+        available = self.root.height - reserved - self.LIST_MIN_HEIGHT
+        self.toolbar_max_height = max(dp(90), available)
 
     # ------------------------------------------------------------------
     # Mes de la asistencia (obligatorio)
@@ -738,7 +852,7 @@ class ZoomAttendanceMobileApp(App):
         try:
             filechooser.open_file(on_selection=callback)
         except Exception as e:
-            _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}")
+            _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}", success=False)
 
     def _open_file_dialog_android(self, is_roster):
         try:
@@ -759,7 +873,7 @@ class ZoomAttendanceMobileApp(App):
             activity.bind(on_activity_result=self._on_android_activity_result)
             PythonActivity.mActivity.startActivityForResult(intent, request_code)
         except Exception as e:
-            _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}")
+            _show_popup("Error", f"No se pudo abrir el selector de archivos:\n{e}", success=False)
 
     def _on_android_activity_result(self, request_code, result_code, intent):
         RESULT_OK = -1
@@ -780,6 +894,7 @@ class ZoomAttendanceMobileApp(App):
             _show_popup(
                 "Error",
                 f"No se pudo leer el archivo elegido desde el celular:\n{e}",
+                success=False,
             )
             return
         if is_roster:
@@ -857,10 +972,10 @@ class ZoomAttendanceMobileApp(App):
             was_disguised = is_disguised_excel_file(filepath)
             records, column_map = load_zoom_csv(filepath)
         except CSVProcessingError as e:
-            _show_popup("Error al procesar el CSV", str(e))
+            _show_popup("Error al procesar el CSV", str(e), success=False)
             return
         except Exception as e:
-            _show_popup("Error inesperado", str(e))
+            _show_popup("Error inesperado", str(e), success=False)
             return
 
         self.zoom_records = records
@@ -882,10 +997,10 @@ class ZoomAttendanceMobileApp(App):
         try:
             roster = load_roster_excel(filepath)
         except RosterProcessingError as e:
-            _show_popup("Error al procesar el listado de socios", str(e))
+            _show_popup("Error al procesar el listado de socios", str(e), success=False)
             return
         except Exception as e:
-            _show_popup("Error inesperado", str(e))
+            _show_popup("Error inesperado", str(e), success=False)
             return
 
         self.roster_records = roster
@@ -1058,19 +1173,21 @@ class ZoomAttendanceMobileApp(App):
         carpeta_publica = f"Download / {APP_TITLE_FOR_STORAGE} / {subfolder}"
         if saved_to_downloads:
             _show_popup(
-                "Archivo guardado correctamente ✓",
+                "Archivo guardado correctamente",
                 "Se guardó en:\n" + carpeta_publica +
                 "\n\ncon el nombre:\n" + os.path.basename(filepath),
                 open_uri=shared_uri,
                 open_mime=mime_type,
+                success=True,
             )
         else:
             _show_popup(
-                "Archivo generado",
+                "No se pudo guardar en Download",
                 f"El archivo se guardó en:\n{filepath}\n\n"
                 "No se pudo copiarlo a la carpeta Download ni abrir el "
                 "diálogo para compartir automáticamente; puedes buscarlo "
                 "con un explorador de archivos.",
+                success=False,
             )
 
     def _copy_to_public_downloads(self, filepath, subfolder):
@@ -1081,10 +1198,18 @@ class ZoomAttendanceMobileApp(App):
         de escribir en una carpeta pública desde Android 10 en adelante;
         escribir ahí con un simple open()/os.path como si fuera una
         carpeta común ya no funciona en versiones modernas de Android.
-        Devuelve el content:// URI del archivo copiado (que sirve para
-        poder abrirlo después con "Abrir archivo"), o None si algo
-        falló (por ejemplo, en un celular muy viejo o si el paquete no
-        se pudo cargar)."""
+        Devuelve el content:// URI del archivo copiado, siempre como
+        texto plano (str) —para poder abrirlo después con "Abrir
+        archivo"— o None si algo falló (por ejemplo, en un celular muy
+        viejo o si el paquete no se pudo cargar).
+
+        IMPORTANTE: androidstorage4kivy devuelve acá un objeto Uri de
+        Android, no un texto. Antes se guardaba tal cual, y eso era la
+        causa exacta del error "Invalid instance of 'android/net/Uri'
+        passed for a 'java/lang/String'" al tocar "Abrir archivo" (ver
+        _open_shared_uri). Convirtiéndolo a texto aquí mismo, apenas se
+        recibe, el resto de la app solo necesita trabajar con un String
+        normal."""
         try:
             from androidstorage4kivy import SharedStorage
             from jnius import autoclass
@@ -1095,7 +1220,12 @@ class ZoomAttendanceMobileApp(App):
                 collection=Environment.DIRECTORY_DOWNLOADS,
                 filepath=dest_relpath,
             )
-            return shared_file
+            if shared_file is None:
+                return None
+            try:
+                return shared_file.toString()
+            except AttributeError:
+                return str(shared_file)
         except Exception:
             return None
 
@@ -1110,7 +1240,7 @@ class ZoomAttendanceMobileApp(App):
         try:
             export_records_to_csv(self.filtered_records, filepath)
         except Exception as e:
-            _show_popup("Error al exportar", str(e))
+            _show_popup("Error al exportar", str(e), success=False)
             return
         self._share_file(filepath, "Asistencia (CSV)", subfolder="Cotejados")
 
@@ -1125,7 +1255,7 @@ class ZoomAttendanceMobileApp(App):
         try:
             export_to_excel(self.filtered_records, filepath)
         except Exception as e:
-            _show_popup("Error al exportar", str(e))
+            _show_popup("Error al exportar", str(e), success=False)
             return
         self._share_file(filepath, "Asistencia (Excel)", subfolder="Cotejados")
 
@@ -1157,6 +1287,6 @@ class ZoomAttendanceMobileApp(App):
                         "Duración (minutos)": r.get("Duración (minutos)", 0),
                     })
         except Exception as e:
-            _show_popup("Error al exportar", str(e))
+            _show_popup("Error al exportar", str(e), success=False)
             return
         self._share_file(filepath, "Pendientes de revisión", subfolder="Por revisar")

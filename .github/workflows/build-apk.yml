@@ -41,9 +41,42 @@ jobs:
             ~/.buildozer
           key: buildozer-v2-${{ hashFiles('buildozer.spec') }}
 
+      - name: Reutilizar siempre la MISMA llave de firma (para poder actualizar sin desinstalar)
+        # Por qué hace falta esto: cada compilación con "android debug"
+        # queda firmada con una llave de depuración (debug.keystore).
+        # Cada ejecución de GitHub Actions es una máquina virtual nueva
+        # y vacía, así que si esta llave no se guarda en algún lado,
+        # Android (Gradle) genera una llave DISTINTA en cada
+        # compilación. El celular considera que un APK firmado con una
+        # llave diferente es "de otra app" y rechaza instalarlo encima
+        # de la versión anterior — eso es justo el error "no se pudo
+        # instalar" al intentar actualizar; la única forma de que
+        # funcionara era desinstalando primero la versión vieja.
+        #
+        # La clave de esta caché ("android-debug-keystore-v1") es FIJA
+        # a propósito (no depende de buildozer.spec ni de nada que
+        # cambie): la primera vez que corra este workflow no habrá
+        # nada guardado, así que Gradle crea la llave de depuración
+        # normalmente; al terminar, GitHub Actions la guarda sola en
+        # esta caché. De ahí en adelante, cada compilación empieza
+        # restaurando esa MISMA llave antes de compilar, así que todas
+        # las versiones futuras quedan firmadas igual y se instalan
+        # como una actualización normal, sin pedir desinstalar nada.
+        #
+        # (GitHub borra las cachés que llevan varias semanas sin usarse.
+        # Si algún día vuelve a pasar el error de "no se pudo instalar"
+        # después de mucho tiempo sin compilar, probablemente sea por
+        # eso — solucionarlo implica desinstalar esa vez la app vieja
+        # una última vez, y de ahí en adelante vuelve a quedar estable.)
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
       - name: Compilar el APK con Buildozer
         run: |
           set -o pipefail
+          mkdir -p ~/.android
           yes | python -m buildozer -v android debug 2>&1 | tee buildozer-log.txt
 
       - name: Publicar el APK y el log completo como archivos descargables
